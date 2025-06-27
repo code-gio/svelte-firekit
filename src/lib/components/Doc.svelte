@@ -53,25 +53,9 @@
 		exists: false
 	});
 
-	// Initialize in browser environment
+	// Initialize document service and set up state management
 	$effect(() => {
-		if (!browser) return;
-
-		firestore = firebaseService.getDbInstance();
-		if (!firestore) {
-			throw new Error('Firestore instance not available');
-		}
-
-		// Create document reference if path string is provided
-		docRef = typeof ref === 'string' ? doc(firestore, ref) : ref;
-
-		// Create document service
-		documentService = firekitDoc(docRef.path, startWith ?? undefined, options);
-	});
-
-	// Subscribe to document changes only if in browser and document service exists
-	$effect(() => {
-		if (!browser || !documentService) {
+		if (!browser) {
 			componentState = {
 				loading: false,
 				data: startWith ?? null,
@@ -81,12 +65,63 @@
 			return;
 		}
 
-		// Update component state based on document service state
+		firestore = firebaseService.getDbInstance();
+		if (!firestore) {
+			componentState = {
+				loading: false,
+				data: null,
+				error: new Error('Firestore instance not available'),
+				exists: false
+			};
+			return;
+		}
+
+		// Create document reference if path string is provided
+		docRef = typeof ref === 'string' ? doc(firestore, ref) : ref;
+
+		// Create document service
+		documentService = firekitDoc(docRef.path, startWith ?? undefined, options);
+
+		// Set initial state from service
 		componentState = {
 			loading: documentService.loading,
 			data: documentService.data,
 			error: documentService.error,
 			exists: documentService.exists
+		};
+
+		// Set up reactive state updates
+		const unsubscribe = documentService.addEventListener?.((event: any) => {
+			if (event.type === 'data_changed') {
+				componentState = {
+					loading: false,
+					data: event.data,
+					error: null,
+					exists: event.exists
+				};
+			} else if (event.type === 'error') {
+				componentState = {
+					loading: false,
+					data: null,
+					error: event.error,
+					exists: false
+				};
+			} else if (event.type === 'loading_started') {
+				componentState = {
+					...componentState,
+					loading: true
+				};
+			} else if (event.type === 'loading_finished') {
+				componentState = {
+					...componentState,
+					loading: false
+				};
+			}
+		});
+
+		return () => {
+			unsubscribe?.();
+			documentService?.dispose();
 		};
 	});
 

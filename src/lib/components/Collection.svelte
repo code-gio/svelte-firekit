@@ -57,7 +57,7 @@
 		count: startWith?.length ?? 0
 	});
 
-	// Subscribe to collection changes only if in browser and collection service exists
+	// Initialize Firestore and collection service
 	$effect(() => {
 		if (!browser) {
 			collectionState = {
@@ -69,7 +69,7 @@
 			return;
 		}
 
-		// Initialize Firestore and collection service
+		// Initialize Firestore
 		firestore = firebaseService.getDbInstance();
 		if (!firestore) {
 			collectionState = {
@@ -86,18 +86,8 @@
 			typeof ref === 'string' ? collection(firestore, ref) : (ref as CollectionReference | Query);
 
 		// Create collection service
-		collectionService = firekitCollection(
-			typeof ref === 'string' ? ref : (ref as CollectionReference).path,
-			queryConstraints
-		);
-
-		// Update state based on collection service state
-		collectionState = {
-			loading: collectionService.loading,
-			data: collectionService.data,
-			error: collectionService.error,
-			count: collectionService.size
-		};
+		const path = typeof ref === 'string' ? ref : (ref as CollectionReference).path;
+		collectionService = firekitCollection(path, queryConstraints);
 
 		// Set up event listener for real-time updates
 		const unsubscribe = collectionService.addEventListener((event) => {
@@ -127,6 +117,14 @@
 				};
 			}
 		});
+
+		// Set initial state from service
+		collectionState = {
+			loading: collectionService.loading,
+			data: collectionService.data,
+			error: collectionService.error,
+			count: collectionService.size
+		};
 
 		return () => {
 			unsubscribe();

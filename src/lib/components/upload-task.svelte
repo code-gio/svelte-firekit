@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ref, type StorageReference, type UploadTaskSnapshot } from 'firebase/storage';
+	import { type UploadTaskSnapshot } from 'firebase/storage';
 	import { firebaseService } from '../firebase.js';
 	import { firekitUploadTask } from '../services/storage.svelte.js';
 	import { browser } from '$app/environment';

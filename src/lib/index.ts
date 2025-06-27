@@ -39,7 +39,7 @@ export { default as AuthGuard } from './components/auth-guard.svelte';
 export { default as CustomGuard } from './components/custom-guard.svelte';
 export { default as SignedIn } from './components/signed-in.svelte';
 export { default as SignedOut } from './components/signed-out.svelte';
-export { default as Doc } from './components/Ddoc.svelte';
+export { default as Doc } from './components/Doc.svelte';
 export { default as Collection } from './components/Collection.svelte';
 export { default as Node } from './components/Node.svelte';
 export { default as NodeList } from './components/node-list.svelte';
