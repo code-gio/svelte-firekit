@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { firekitAuth } from '../services/auth.js';
-	import { firebaseService } from '../firebase.js';
+	import { getContext } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { onDestroy } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import type { UserProfile } from '../types/auth.js';
 	import type { Auth } from 'firebase/auth';
 	import type { Snippet } from 'svelte';
@@ -42,29 +42,37 @@
 		verificationChecks?: ((user: UserProfile, auth: Auth) => boolean | Promise<boolean>)[];
 	} = $props();
 
-	// Get Firebase Auth instance
-	const auth = firebaseService.getAuthInstance();
-	if (!auth) {
-		throw new Error('Firebase Auth instance not available');
-	}
-
-	// Reactive auth state
+	// Try to get Firebase Auth from context first, fallback to service
+	let auth: Auth | null = $state(null);
+	let unsubscribe: (() => void) | null = null;
 	let authState = $state(firekitAuth.getState());
 	let verificationPassed = $state(true);
 	let isVerifying = $state(false);
-
-	// Subscribe to auth state changes
-	const unsubscribe = firekitAuth.onAuthStateChanged((state) => {
-		authState = state;
-	});
 
 	// Sign out function
 	async function signOut() {
 		await firekitAuth.signOut();
 	}
 
+	// Check verification functions
+	async function runVerificationChecks(): Promise<boolean> {
+		if (!auth || !authState.user || verificationChecks.length === 0) {
+			return true;
+		}
+
+		try {
+			const results = await Promise.all(
+				verificationChecks.map((check) => check(authState.user!, auth!))
+			);
+			return results.every((result) => result === true);
+		} catch (error) {
+			console.error('Verification check failed:', error);
+			return false;
+		}
+	}
+
 	// Check if current auth state and verification checks pass
-	$effect(() => {
+	async function checkAccess() {
 		if (authState.loading) return;
 
 		const isAuthenticated = firekitAuth.isAuthenticated();
@@ -78,29 +86,62 @@
 		// If authenticated and verification checks exist, run them
 		if (isAuthenticated && verificationChecks.length > 0) {
 			isVerifying = true;
-			Promise.all(verificationChecks.map((check) => check(authState.user!, auth)))
-				.then((results) => {
-					verificationPassed = results.every((result) => result === true);
-					if (!verificationPassed) {
-						goto(redirectTo);
-					}
-				})
-				.catch((error) => {
-					console.error('Verification check failed:', error);
-					verificationPassed = false;
+			try {
+				verificationPassed = await runVerificationChecks();
+				if (!verificationPassed) {
 					goto(redirectTo);
-				})
-				.finally(() => {
-					isVerifying = false;
-				});
+				}
+			} finally {
+				isVerifying = false;
+			}
 		} else {
 			verificationPassed = true;
 		}
+	}
+
+	onMount(async () => {
+		try {
+			// Try to get auth from context first
+			auth = getContext<Auth>('firebase/auth');
+
+			// If context doesn't exist, get from service
+			if (!auth) {
+				console.warn('Firebase Auth not found in context, using service directly');
+				const { firebaseService } = await import('../firebase.js');
+				auth = firebaseService.getAuthInstance();
+			}
+
+			if (!auth) {
+				throw new Error('Firebase Auth instance not available');
+			}
+
+			// Subscribe to auth state changes
+			unsubscribe = firekitAuth.onAuthStateChanged((state) => {
+				authState = state;
+			});
+
+			// Initial access check
+			await checkAccess();
+		} catch (error) {
+			console.error('Failed to initialize CustomGuard:', error);
+			authState = {
+				user: null,
+				loading: false,
+				initialized: true
+			};
+		}
+	});
+
+	// Watch for auth state changes
+	$effect(() => {
+		checkAccess();
 	});
 
 	// Cleanup subscription on component destruction
 	onDestroy(() => {
-		unsubscribe();
+		if (unsubscribe) {
+			unsubscribe();
+		}
 	});
 </script>
 
@@ -117,6 +158,6 @@
 			</div>
 		</div>
 	{/if}
-{:else if firekitAuth.isAuthenticated() === requireAuth && verificationPassed}
+{:else if auth && firekitAuth.isAuthenticated() === requireAuth && verificationPassed}
 	{@render children(authState.user!, auth, signOut)}
 {/if}

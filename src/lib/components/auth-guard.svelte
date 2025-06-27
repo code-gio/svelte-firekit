@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { firekitAuth } from '../services/auth.js';
-	import { firebaseService } from '../firebase.js';
+	import { getContext } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { onDestroy } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import type { UserProfile } from '../types/auth.js';
 	import type { Auth } from 'firebase/auth';
 	import type { Snippet } from 'svelte';
@@ -36,27 +36,51 @@
 		fallback?: Snippet<[]>;
 	} = $props();
 
-	// Get Firebase Auth instance
-	const auth = firebaseService.getAuthInstance();
-	if (!auth) {
-		throw new Error('Firebase Auth instance not available');
-	}
-
-	// Reactive auth state
+	// Try to get Firebase Auth from context first, fallback to service
+	let auth: Auth | null = $state(null);
+	let unsubscribe: (() => void) | null = null;
 	let authState = $state(firekitAuth.getState());
-
-	// Subscribe to auth state changes
-	const unsubscribe = firekitAuth.onAuthStateChanged((state) => {
-		authState = state;
-	});
 
 	// Sign out function
 	async function signOut() {
 		await firekitAuth.signOut();
 	}
 
+	onMount(async () => {
+		try {
+			// Try to get auth from context first
+			auth = getContext<Auth>('firebase/auth');
+
+			// If context doesn't exist, get from service
+			if (!auth) {
+				console.warn('Firebase Auth not found in context, using service directly');
+				const { firebaseService } = await import('../firebase.js');
+				auth = firebaseService.getAuthInstance();
+			}
+
+			if (!auth) {
+				throw new Error('Firebase Auth instance not available');
+			}
+
+			// Subscribe to auth state changes
+			unsubscribe = firekitAuth.onAuthStateChanged((state) => {
+				authState = state;
+			});
+
+			// Initial auth check
+			checkAuthState();
+		} catch (error) {
+			console.error('Failed to initialize AuthGuard:', error);
+			authState = {
+				user: null,
+				loading: false,
+				initialized: true
+			};
+		}
+	});
+
 	// Check if current auth state matches requirements
-	$effect(() => {
+	function checkAuthState() {
 		if (authState.loading) return;
 
 		const isAuthenticated = firekitAuth.isAuthenticated();
@@ -65,11 +89,18 @@
 		if (shouldRedirect) {
 			goto(redirectTo);
 		}
+	}
+
+	// Watch for auth state changes
+	$effect(() => {
+		checkAuthState();
 	});
 
 	// Cleanup subscription on component destruction
 	onDestroy(() => {
-		unsubscribe();
+		if (unsubscribe) {
+			unsubscribe();
+		}
 	});
 </script>
 
@@ -84,6 +115,6 @@
 			</div>
 		</div>
 	{/if}
-{:else if firekitAuth.isAuthenticated() === requireAuth}
+{:else if auth && firekitAuth.isAuthenticated() === requireAuth}
 	{@render children(authState.user!, auth, signOut)}
 {/if}

@@ -122,8 +122,10 @@ class FirekitUserStore {
 	private _userPhoneNumber = $derived(this._user?.phoneNumber ?? null);
 
 	private constructor() {
-		// Don't initialize Firebase services in constructor
-		// They will be initialized lazily when needed
+		if (typeof window !== 'undefined') {
+			// Initialize Firebase services immediately like the old working code
+			this.initializeServices();
+		}
 	}
 
 	/**
@@ -209,73 +211,61 @@ class FirekitUserStore {
 
 	/** Current user profile */
 	get user(): UserProfile | null {
-		this.initializeServices();
 		return this._user;
 	}
 
 	/** Current loading state */
 	get loading(): boolean {
-		this.initializeServices();
 		return this._loading;
 	}
 
 	/** Whether auth has been initialized */
 	get initialized(): boolean {
-		this.initializeServices();
 		return this._initialized;
 	}
 
 	/** Current error state */
 	get error(): Error | null {
-		this.initializeServices();
 		return this._error;
 	}
 
 	/** Whether user is authenticated (not anonymous) */
 	get isAuthenticated(): boolean {
-		this.initializeServices();
 		return this._isAuthenticated;
 	}
 
 	/** Whether user is anonymous */
 	get isAnonymous(): boolean {
-		this.initializeServices();
 		return this._isAnonymous;
 	}
 
 	/** Whether user's email is verified */
 	get isEmailVerified(): boolean {
-		this.initializeServices();
 		return this._isEmailVerified;
 	}
 
 	/** User's email address */
 	get email(): string | null {
-		this.initializeServices();
 		return this._userEmail;
 	}
 
 	/** User's display name */
 	get displayName(): string | null {
-		this.initializeServices();
 		return this._userDisplayName;
 	}
 
 	/** User's photo URL */
 	get photoURL(): string | null {
-		this.initializeServices();
 		return this._userPhotoURL;
 	}
 
 	/** User's unique ID */
 	get uid(): string | null {
-		this.initializeServices();
 		return this._userId;
 	}
 
 	/** User's phone number */
 	get phoneNumber(): string | null {
-		this.initializeServices();
 		return this._userPhoneNumber;
 	}
 
@@ -295,7 +285,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updateDisplayName(displayName: string): Promise<void> {
-		this.initializeServices();
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -331,7 +320,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updatePhotoURL(photoURL: string): Promise<void> {
-		this.initializeServices();
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -370,7 +358,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updateProfile(profileData: UserProfileUpdateData): Promise<void> {
-		this.initializeServices();
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -410,7 +397,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updateEmail(newEmail: string): Promise<void> {
-		this.initializeServices();
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -446,7 +432,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updatePassword(newPassword: string): Promise<void> {
-		this.initializeServices();
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -479,7 +464,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async sendEmailVerification(): Promise<void> {
-		this.initializeServices();
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -505,7 +489,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async reloadUser(): Promise<void> {
-		this.initializeServices();
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -543,7 +526,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async getIdToken(forceRefresh: boolean = false): Promise<string> {
-		this.initializeServices();
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -573,7 +555,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async getExtendedUserData(): Promise<ExtendedUserData | null> {
-		this.initializeServices();
 		if (!this._user?.uid || !this.firestore) {
 			return null;
 		}
@@ -608,7 +589,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updateExtendedUserData(data: Partial<ExtendedUserData>): Promise<void> {
-		this.initializeServices();
 		if (!this._user?.uid) {
 			throw new FirekitAuthError(AuthErrorCode.USER_NOT_FOUND, 'No authenticated user found.');
 		}
@@ -649,7 +629,6 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async waitForAuth(): Promise<UserProfile | null> {
-		this.initializeServices();
 		return new Promise((resolve) => {
 			if (this._initialized) {
 				resolve(this._user);

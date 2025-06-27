@@ -149,9 +149,23 @@ class FirebaseService implements FirebaseServiceInstance {
 	 */
 	getDbInstance(): FirebaseServiceInstance['db'] {
 		if (!this.db) {
-			this.getFirebaseApp();
-			if (!this.db) {
-				throw new FirebaseServiceError('Firestore instance not available', 'firestore');
+			try {
+				this.getFirebaseApp();
+				if (!this.db) {
+					// If we're not in a browser environment, Firestore won't be available
+					if (!this.isBrowser) {
+						throw new FirebaseServiceError(
+							'Firestore is not available in server environment',
+							'firestore'
+						);
+					}
+					throw new FirebaseServiceError('Firestore instance not available', 'firestore');
+				}
+			} catch (error) {
+				if (error instanceof FirebaseServiceError) {
+					throw error;
+				}
+				throw new FirebaseServiceError('Failed to initialize Firestore', 'firestore');
 			}
 		}
 		return this.db;
