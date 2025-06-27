@@ -1,0 +1,108 @@
+---
+description: 
+globs: **/*.svelte, src/**/*.ts, src/**/*.js
+alwaysApply: false
+---
+---  
+description: SvelteKit + shadcn-svelte usage and cursor rules  
+globs: *.svelte, *.svelte.ts  
+---  
+
+# Using shadcn-svelte Components in SvelteKit
+
+**Overview:** This guide covers how to use the **shadcn-svelte** component library (an unofficial Svelte port of shadcn/ui) in a SvelteKit project. We use **Tailwind CSS** for styling and adopt Svelte 5's new syntax where applicable ([`, `<meta>`, and `<link>` tags.  Useful for managing document metadata from within components.  Must be at the top level of a component.
+
+```svelte
+<svelte:head>
+  <title>My Svelte App](https://gist.github.com/amxv/45025aa6fecd1a3b74f15091a546fced/raw/b73c897e8d76759f8a78ca3183a0a1236d26bf2b/svelte5.mdc#:~:text=,Please)). The shadcn-svelte CLI lets us install pre-built components (just like the original React version) directly into our SvelteKit codebase ([`, `<meta>`, and `<link>` tags.  Useful for managing document metadata from within components.  Must be at the top level of a component.
+
+```svelte
+<svelte:head>
+  <title>My Svelte App](https://gist.github.com/amxv/45025aa6fecd1a3b74f15091a546fced/raw/b73c897e8d76759f8a78ca3183a0a1236d26bf2b/svelte5.mdc#:~:text=,Please)). SvelteKit plays a role similar to Next.js for Svelte applications (handling routing, SSR, etc.) ([Svelte 5 and SvelteKit Cursor Rules (scroll down to see sveltekit.mdc) - Pop these in the  `.cursor/rules` folder in the root of your project. · GitHub](mdc:https:/gist.github.com/amxv/45025aa6fecd1a3b74f15091a546fced#:~:text=This%20cheat%20sheet%20provides%20a,runes)), so many Next.js concepts map naturally to SvelteKit.
+
+## Svelte 5 Syntax Highlights
+
+When writing Svelte components (*.svelte files), we follow Svelte 5 conventions for reactivity and composition. Notable changes from earlier Svelte versions (and React) include:
+
+- **Reactive State with Runes:** Use the new runes (e.g. `$state`, `$derived`) for reactive variables instead of the old `$: ` syntax. This provides a more explicit and powerful reactivity model in Svelte 5 ([`, `<meta>`, and `<link>` tags.  Useful for managing document metadata from within components.  Must be at the top level of a component.
+
+```svelte
+<svelte:head>
+  <title>My Svelte App](https://gist.github.com/amxv/45025aa6fecd1a3b74f15091a546fced/raw/b73c897e8d76759f8a78ca3183a0a1236d26bf2b/svelte5.mdc#:~:text=key%20points%20include%3A%20,syntax)). For example, `let count = $state(0)` declares a reactive state variable.  
+- **Event Handlers as Properties:** Attach event listeners using plain properties (no `on:` prefix). For instance, use `onclick={...}` instead of `on:click` – the colon is removed in Svelte 5 ([Svelte 5 migration guide • Docs • Svelte](mdc:https:/svelte.dev/docs/svelte/v5-migration-guide#:~:text=Event%20changes)). This change means events are just like any other prop now (you can even use the `{onclick}` shorthand with a function defined in `<script>`).  
+- **Snippets instead of Slots:** Svelte 5 deprecates `<slot>` in favor of **snippets**, a new way to pass reusable chunks of markup. In practice, you should avoid using Svelte 4 style slots and use the snippet syntax for projecting content into components ([Svelte 5 use snippets instead of slots : r/sveltejs - Reddit](mdc:https:/www.reddit.com/r/sveltejs/comments/1ctz4oj/svelte_5_use_snippets_instead_of_slots/#:~:text=Reddit%20www,deprecated%20and%20replaced%20with%20snippets)). (Snippets can be defined and passed as regular props, offering more flexibility than traditional slots.)  
+- **Props via `$props()`:** Define component props using the `$props()` rune with destructuring, rather than multiple `export let` statements. Svelte 5 consolidates all incoming props into a single object you can destructure for defaults, renaming, rest props, etc ([Svelte 5 migration guide • Docs • Svelte](mdc:https:/svelte.dev/docs/svelte/v5-migration-guide#:~:text=export%20let%20%E2%86%92%20%24props)). For example:  
+  ```svelte
+  <script lang="ts">
+    let { title = 'Untitled', enabled } = $props();
+    // `title` and `enabled` are now props, with a default for title
+  </script>
+  ```  
+  This replaces the Svelte 4 pattern of `export let title; export let enabled;` ([Svelte 5 migration guide • Docs • Svelte](mdc:https:/svelte.dev/docs/svelte/v5-migration-guide#:~:text=export%20let%20%E2%86%92%20%24props)), and automatically handles remaining/unknown props via `$$props`.  
+- **SvelteKit Stores vs State:** Use the new `$app/state` module (if available) instead of `$app/stores` for global app state. In SvelteKit with Svelte 5, `$app/state` provides direct state objects (like `page`, etc.) that you can use without subscribing ([`, `<meta>`, and `<link>` tags.  Useful for managing document metadata from within components.  Must be at the top level of a component.
+
+```svelte
+<svelte:head>
+  <title>My Svelte App](https://gist.github.com/amxv/45025aa6fecd1a3b74f15091a546fced/raw/b73c897e8d76759f8a78ca3183a0a1236d26bf2b/svelte5.mdc#:~:text=the%20new%20event%20handler%20syntax,can%20just%20access%20state%20objects)). For example, you can read `page.url.pathname` directly from `$app/state` rather than using a derived store. (This is a shift from older SvelteKit where you would import stores from `$app/stores`.)
+
+By adhering to these conventions, our SvelteKit code stays aligned with the latest best practices and matches the expected format for this project. 
+
+## Installing shadcn-svelte Components
+
+To set up shadcn-svelte in your SvelteKit project, use the official CLI. Below are the typical steps:
+
+1. **Ensure Tailwind CSS is configured:** If you haven’t already, add Tailwind to SvelteKit (e.g. via `npx svelte-add@latest tailwindcss`). This will set up the Tailwind config and global CSS. The shadcn-svelte components rely on Tailwind classes and variables for styling.  
+2. **Initialize shadcn-svelte:** Run the init command in your project root:  
+   ```bash
+   npx shadcn-svelte@latest init
+   ```  
+   This will prompt you to configure some options in a `components.json` file. For example: choose TypeScript (recommended), select the default style and base color (e.g. Slate), specify your global CSS file (e.g. `src/app.css`) and Tailwind config path, and confirm the import alias for components (by default `$lib/components`) ([SvelteKit - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/installation/sveltekit#:~:text=Would%20you%20like%20to%20use,alias%20for%20utils%3A%20%E2%80%BA%20%24lib%2Futils)). These settings prepare your project for adding the UI components.  
+3. **Add components:** Use the CLI to install whichever UI components you need. For instance:  
+   ```bash
+   npx shadcn-svelte@latest add button card dialog
+   ```  
+   You can list multiple components in one command, or run separate commands. Each component added will generate Svelte component files (and possibly related utility files) under the designated directory (e.g. `src/lib/components/ui/`). This is analogous to how the React shadcn/ui CLI would copy component code into your project. For example, adding the `button` component will create a file like `src/lib/components/ui/Button.svelte` (along with any styles or utility modules it requires) ([`, `<meta>`, and `<link>` tags.  Useful for managing document metadata from within components.  Must be at the top level of a component.
+
+```svelte
+<svelte:head>
+  <title>My Svelte App](https://gist.github.com/amxv/45025aa6fecd1a3b74f15091a546fced/raw/b73c897e8d76759f8a78ca3183a0a1236d26bf2b/svelte5.mdc#:~:text=,Please)).
+
+After these steps, the components are ready to use in your SvelteKit app. The CLI also installs any required dependencies (such as Radix UI or other libraries that the components are built on, in their Svelte adaptations).
+
+## Importing and Using Components
+
+Once you’ve added a component via the CLI, you can import and use it in your Svelte files. The components are exported from the paths configured earlier (by default under the `$lib/components` alias):
+
+```svelte
+<script lang="ts">
+  import { Button } from "$lib/components/ui/button";
+  // import other components as needed
+</script>
+
+<Button onclick={() => console.log('Clicked!')}>Click me</Button>
+```
+
+In the above example, the `Button` component is imported from the `ui` directory under our components alias. (The CLI created `button.svelte`, and an index file to allow named export if needed – hence we import `{ Button }` from the folder path.) You can then use `<Button>...</Button>` in the markup just like any native element. 
+
+**Import path structure:** By default, `"$lib/components/ui/button"` points to your `src/lib/components/ui/button.svelte` file (the CLI might also export it via an index for convenience). The `$lib` alias is configured in SvelteKit for `src/lib` ([SvelteKit - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/installation/sveltekit#:~:text=Would%20you%20like%20to%20use,alias%20for%20utils%3A%20%E2%80%BA%20%24lib%2Futils)). If you chose a different alias or directory in the init prompts, be sure to use that in your imports. For utilities (if any component includes helper functions), the CLI uses a `$lib/utils` alias by default ([SvelteKit - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/installation/sveltekit#:~:text=Would%20you%20like%20to%20use,alias%20for%20utils%3A%20%E2%80%BA%20%24lib%2Futils)). Ensure your `svelte.config.js`/`tsconfig.json` reflect these aliases so that imports resolve correctly in your editor and build.
+
+After importing, you can use the component in the markup. Pass props as needed (e.g. `<Button disabled={true}>`, or different Tailwind classes). The shadcn-svelte components are built to be accessible and themeable, matching their React counterparts in functionality. For example, you might use `<Button variant="outline">Secondary</Button>` if the Button component supports variants via props (similar to the React version). Refer to the shadcn-svelte documentation for each component to see available props and slots/snippets ([SvelteKit - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/installation/sveltekit#:~:text=The%20command%20above%20will%20add,then%20import%20it%20like%20this)).
+
+## Styling and Theming
+
+shadcn-svelte components come unstyled aside from base Tailwind CSS utilities and CSS variables that define the theme. The **Default** style uses a neutral color palette (Slate by default during setup) for things like backgrounds and text ([SvelteKit - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/installation/sveltekit#:~:text=Would%20you%20like%20to%20use,alias%20for%20utils%3A%20%E2%80%BA%20%24lib%2Futils)). The styling approach relies on Tailwind and CSS custom properties rather than a Context provider as in some React projects. Here are some notes on theming:
+
+- **CSS Variables:** The components utilize CSS variables for colors (e.g. `--primary`, `--primary-foreground`, etc.). These are defined in your stylesheet (for example, the CLI might inject them into your `app.css`). Using CSS variables allows easy theme tweaks – you can override these in your global CSS or `:root` to change the look and feel **without altering class names** ([Theming - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/theming#:~:text=Use%20CSS%20Variables%20to%20customize,and%20feel%20of%20your%20application)). For instance, to change the primary color, you’d update the `--primary` variable value (HSL) in CSS. The Tailwind config is set up to use these variables in utility classes (via the `tailwind.config.js` with `extend { colors: { ... } }`).  
+- **Switching Theme Colors:** If you want to adopt a pre-designed theme, the shadcn-svelte docs provide **theme presets** (hand-picked color schemes). You can copy the CSS variable definitions from the Themes page and include them in your project to instantly restyle components. Each theme is basically a set of `--color-name` variables (for primary, secondary, etc.) that Tailwind will apply via its classes ([Theming - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/theming#:~:text=Convention)) ([Theming - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/theming#:~:text=,98)). Simply replace or override the default values with your chosen theme’s values.  
+- **Dark Mode:** SvelteKit doesn’t require a special context or provider for dark mode. We use Tailwind’s built-in dark mode strategy (the `class` strategy) ([Dark mode - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/dark-mode/svelte#:~:text=Adding%20dark%20mode%20to%20your,Svelte%20site)). This means that if a `dark` class is present on the `<html>` element, Tailwind’s `dark:` variant styles will apply. The components are designed with dark variants in their classes, so to enable dark mode, you just need to toggle that class. How you toggle it is up to you – for example, you can use the `mode-watcher` package which provides a `<ModeWatcher>` component to automatically add/remove the `dark` class based on user preference or system settings ([Dark mode - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/dark-mode/svelte#:~:text=We%20use%20the%20,CSS%20documentation%20for%20more%20information)) ([Dark mode - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/dark-mode/svelte#:~:text=Import%20the%20,it%20in%20your%20root%20layout)). You would include `<ModeWatcher />` in your root layout (e.g. `src/routes/+layout.svelte`) to globally handle theme switching. Alternatively, you can implement a custom store or script to add the class to `document.documentElement`. Unlike the React version (which might use a context or Next.js’ `next-themes`), here it’s purely done with a CSS class on the HTML element, making it simple and framework-agnostic.  
+
+With these theming capabilities, you can tailor the visual style of the components to match your brand or design requirements. All default styles are in plain CSS/Tailwind, so you have full control. For more advanced customization (such as replacing certain component markup or behavior), you can directly edit the Svelte component files since they reside in your project – one of the benefits of this library being a set of copied components rather than an opaque package.
+
+## Conclusion
+
+By rewriting our Next.js/TypeScript component usage guidelines for SvelteKit, we’ve aligned our project with Svelte’s ecosystem and the shadcn-svelte library. We use `.svelte` single-file components and idiomatic Svelte code instead of React/JSX. The shadcn-svelte components provide a nearly drop-in replacement for their React counterparts, with installation via `npx shadcn-svelte` and usage that feels native to SvelteKit ([SvelteKit - shadcn-svelte](mdc:https:/www.shadcn-svelte.com/docs/installation/sveltekit#:~:text=The%20command%20above%20will%20add,then%20import%20it%20like%20this)). Remember to follow the Svelte 5 conventions (runes, new event syntax, snippets, etc.) outlined above so that all code is consistent and future-proof ([`, `<meta>`, and `<link>` tags.  Useful for managing document metadata from within components.  Must be at the top level of a component.
+
+```svelte
+<svelte:head>
+  <title>My Svelte App](https://gist.github.com/amxv/45025aa6fecd1a3b74f15091a546fced/raw/b73c897e8d76759f8a78ca3183a0a1236d26bf2b/svelte5.mdc#:~:text=key%20points%20include%3A%20,can%20just%20access%20state%20objects)) ([Svelte 5 migration guide • Docs • Svelte](mdc:https:/svelte.dev/docs/svelte/v5-migration-guide#:~:text=Event%20changes)). With this setup, you can rapidly build a SvelteKit application using a beautiful component library, enjoying the productivity of Cursor with these updated rules and documentation.
+

@@ -1,13 +1,13 @@
 {
 	"name": "svelte-firekit",
-	"version": "0.0.22",
+	"version": "0.1.0",
 	"license": "MIT",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build && npm run package",
+		"build": "vite build && npm run prepack",
 		"preview": "vite preview",
-		"package": "svelte-kit sync && svelte-package && publint",
-		"prepublishOnly": "npm run package",
+		"prepare": "svelte-kit sync || echo ''",
+		"prepack": "svelte-kit sync && svelte-package && publint",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
@@ -43,23 +43,23 @@
 		}
 	},
 	"peerDependencies": {
-		"firebase": "^11.0.1",
+		"firebase": "^11.9.1",
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-auto": "^3.0.0",
-		"@sveltejs/kit": "^2.9.0",
+		"@sveltejs/adapter-auto": "^6.0.0",
+		"@sveltejs/kit": "^2.16.0",
 		"@sveltejs/package": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
-		"prettier": "^3.3.2",
-		"prettier-plugin-svelte": "^3.2.6",
-		"publint": "^0.2.0",
+		"prettier": "^3.4.2",
+		"prettier-plugin-svelte": "^3.3.3",
+		"publint": "^0.3.2",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",
 		"typescript": "^5.0.0",
-		"vite": "^6.0.0"
+		"vite": "^6.2.6"
 	},
 	"dependencies": {
-		"firebase": "^11.0.2"
+		"firebase": "^11.9.1"
 	}
 }
