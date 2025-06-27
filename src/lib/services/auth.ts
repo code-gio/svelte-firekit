@@ -72,8 +72,9 @@ import {
  */
 class FirekitAuth {
 	private static instance: FirekitAuth;
-	private auth = firebaseService.getAuthInstance()!;
-	private firestore = firebaseService.getDbInstance()!;
+	private auth: ReturnType<typeof firebaseService.getAuthInstance> | null = null;
+	private firestore: ReturnType<typeof firebaseService.getDbInstance> | null = null;
+	private _servicesInitialized = false;
 	private authState: AuthState = {
 		user: null,
 		loading: true,
@@ -83,13 +84,8 @@ class FirekitAuth {
 	private recaptchaVerifiers: Map<string, RecaptchaVerifier> = new Map();
 
 	private constructor() {
-		if (!this.auth) {
-			throw new Error('Firebase Auth instance not available');
-		}
-		if (!this.firestore) {
-			throw new Error('Firestore instance not available');
-		}
-		this.initializeAuthStateListener();
+		// Don't initialize Firebase services in constructor
+		// They will be initialized lazily when needed
 	}
 
 	/**
@@ -104,10 +100,38 @@ class FirekitAuth {
 	}
 
 	/**
+	 * Initializes Firebase services and auth state listener
+	 * @private
+	 */
+	private initializeServices(): void {
+		if (this._servicesInitialized) return;
+
+		try {
+			this.auth = firebaseService.getAuthInstance();
+			this.firestore = firebaseService.getDbInstance();
+			this._servicesInitialized = true;
+			this.initializeAuthStateListener();
+		} catch (error) {
+			console.error('Failed to initialize Firebase services:', error);
+			this.authState = {
+				user: null,
+				loading: false,
+				initialized: true
+			};
+			this.notifyStateListeners();
+		}
+	}
+
+	/**
 	 * Initializes the authentication state listener
 	 * @private
 	 */
 	private initializeAuthStateListener(): void {
+		if (!this.auth) {
+			console.error('Auth instance not available');
+			return;
+		}
+
 		onAuthStateChanged(
 			this.auth,
 			(user) => {
@@ -151,6 +175,9 @@ class FirekitAuth {
 	 * @private
 	 */
 	private async updateUserInFirestore(user: User): Promise<void> {
+		if (!this.firestore) {
+			throw new Error('Firestore instance not available');
+		}
 		await updateUserInFirestore(this.firestore, user);
 	}
 
@@ -167,6 +194,7 @@ class FirekitAuth {
 	 * @returns {AuthState} Current authentication state
 	 */
 	getState(): AuthState {
+		this.initializeServices();
 		return { ...this.authState };
 	}
 
@@ -175,7 +203,8 @@ class FirekitAuth {
 	 * @returns {User | null} Current Firebase user or null
 	 */
 	getCurrentUser(): User | null {
-		return this.auth.currentUser;
+		this.initializeServices();
+		return this.auth?.currentUser ?? null;
 	}
 
 	/**
@@ -183,6 +212,7 @@ class FirekitAuth {
 	 * @returns {UserProfile | null} Current user profile or null
 	 */
 	getCurrentUserProfile(): UserProfile | null {
+		this.initializeServices();
 		return this.authState.user;
 	}
 
@@ -191,6 +221,7 @@ class FirekitAuth {
 	 * @returns {Promise<UserProfile | null>} Promise that resolves when auth is initialized
 	 */
 	async waitForAuth(): Promise<UserProfile | null> {
+		this.initializeServices();
 		return new Promise((resolve) => {
 			if (this.authState.initialized) {
 				resolve(this.authState.user);
@@ -212,6 +243,7 @@ class FirekitAuth {
 	 * @returns {Function} Unsubscribe function
 	 */
 	onAuthStateChanged(callback: (state: AuthState) => void): () => void {
+		this.initializeServices();
 		this.stateListeners.add(callback);
 
 		// Immediately call with current state
@@ -244,6 +276,11 @@ class FirekitAuth {
 	 * ```
 	 */
 	async signInWithEmail(email: string, password: string): Promise<UserProfile> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			this.authState.loading = true;
 			this.notifyStateListeners();
@@ -278,6 +315,11 @@ class FirekitAuth {
 	 * ```
 	 */
 	async signInWithGoogle(): Promise<UserProfile> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			this.authState.loading = true;
 			this.notifyStateListeners();
@@ -302,6 +344,11 @@ class FirekitAuth {
 	 * @throws {FirekitAuthError} If sign-in fails
 	 */
 	async signInWithFacebook(): Promise<UserProfile> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			this.authState.loading = true;
 			this.notifyStateListeners();
@@ -326,6 +373,11 @@ class FirekitAuth {
 	 * @throws {FirekitAuthError} If sign-in fails
 	 */
 	async signInWithApple(): Promise<UserProfile> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			this.authState.loading = true;
 			this.notifyStateListeners();
@@ -356,6 +408,11 @@ class FirekitAuth {
 	 * ```
 	 */
 	async signInAnonymously(): Promise<UserProfile> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			this.authState.loading = true;
 			this.notifyStateListeners();
@@ -389,6 +446,11 @@ class FirekitAuth {
 		phoneNumber: string,
 		recaptchaContainerId: string
 	): Promise<PhoneVerificationResult> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			this.authState.loading = true;
 			this.notifyStateListeners();
@@ -420,11 +482,11 @@ class FirekitAuth {
 
 			return {
 				verificationId: confirmationResult.verificationId,
-				confirm: async (code: string) => {
+				confirm: async (verificationCode: string): Promise<UserProfile> => {
 					try {
-						const result = await confirmationResult.confirm(code);
-						await this.updateUserInFirestore(result.user);
-						return this.mapFirebaseUserToProfile(result.user);
+						const userCredential = await confirmationResult.confirm(verificationCode);
+						await this.updateUserInFirestore(userCredential.user);
+						return this.mapFirebaseUserToProfile(userCredential.user);
 					} catch (error: any) {
 						this.handleAuthError(error);
 					} finally {
@@ -471,6 +533,11 @@ class FirekitAuth {
 		displayName?: string,
 		sendVerification: boolean = true
 	): Promise<UserProfile> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			this.authState.loading = true;
 			this.notifyStateListeners();
@@ -516,6 +583,11 @@ class FirekitAuth {
 	 * ```
 	 */
 	async sendPasswordReset(email: string): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			await sendPasswordResetEmail(this.auth, email);
 		} catch (error: any) {
@@ -531,6 +603,11 @@ class FirekitAuth {
 	 * @throws {FirekitAuthError} If reset fails
 	 */
 	async confirmPasswordReset(code: string, newPassword: string): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		try {
 			await confirmPasswordReset(this.auth, code, newPassword);
 		} catch (error: any) {
@@ -558,7 +635,8 @@ class FirekitAuth {
 		newPassword: string,
 		currentPassword: string
 	): Promise<PasswordUpdateResult> {
-		if (!this.auth.currentUser) {
+		this.initializeServices();
+		if (!this.auth?.currentUser) {
 			return {
 				success: false,
 				message: 'No authenticated user found.',
@@ -614,7 +692,8 @@ class FirekitAuth {
 	 * ```
 	 */
 	async updateUserProfile(profile: { displayName?: string; photoURL?: string }): Promise<void> {
-		if (!this.auth.currentUser) {
+		this.initializeServices();
+		if (!this.auth?.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
 
@@ -638,7 +717,8 @@ class FirekitAuth {
 	 * ```
 	 */
 	async updateEmail(newEmail: string): Promise<void> {
-		if (!this.auth.currentUser) {
+		this.initializeServices();
+		if (!this.auth?.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
 
@@ -650,10 +730,6 @@ class FirekitAuth {
 		}
 	}
 
-	// ========================================
-	// EMAIL VERIFICATION METHODS
-	// ========================================
-
 	/**
 	 * Sends email verification to current user
 	 * @returns {Promise<void>} Promise that resolves when verification email is sent
@@ -662,11 +738,11 @@ class FirekitAuth {
 	 * @example
 	 * ```typescript
 	 * await firekitAuth.sendEmailVerification();
-	 * console.log("Verification email sent");
 	 * ```
 	 */
 	async sendEmailVerification(): Promise<void> {
-		if (!this.auth.currentUser) {
+		this.initializeServices();
+		if (!this.auth?.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
 
@@ -678,12 +754,18 @@ class FirekitAuth {
 	}
 
 	/**
-	 * Reloads current user to get updated email verification status
+	 * Reloads user to get updated data
 	 * @returns {Promise<void>} Promise that resolves when user is reloaded
 	 * @throws {FirekitAuthError} If reload fails
+	 *
+	 * @example
+	 * ```typescript
+	 * await firekitAuth.reloadUser();
+	 * ```
 	 */
 	async reloadUser(): Promise<void> {
-		if (!this.auth.currentUser) {
+		this.initializeServices();
+		if (!this.auth?.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
 
@@ -695,10 +777,6 @@ class FirekitAuth {
 		}
 	}
 
-	// ========================================
-	// TOKEN METHODS
-	// ========================================
-
 	/**
 	 * Gets the current user's ID token
 	 * @param {boolean} [forceRefresh=false] Whether to force token refresh
@@ -708,11 +786,11 @@ class FirekitAuth {
 	 * @example
 	 * ```typescript
 	 * const token = await firekitAuth.getIdToken();
-	 * // Use token for authenticated API calls
 	 * ```
 	 */
 	async getIdToken(forceRefresh: boolean = false): Promise<string> {
-		if (!this.auth.currentUser) {
+		this.initializeServices();
+		if (!this.auth?.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
 
@@ -723,39 +801,27 @@ class FirekitAuth {
 		}
 	}
 
-	// ========================================
-	// ACCOUNT MANAGEMENT
-	// ========================================
-
 	/**
-	 * Reauthenticates current user with email/password
-	 * @param {string} currentPassword Current password
-	 * @returns {Promise<void>} Promise that resolves when reauthentication succeeds
-	 * @throws {FirekitAuthError} If reauthentication fails
+	 * Reauthenticates user with current password
 	 * @private
 	 */
 	private async reauthenticateUser(currentPassword: string): Promise<void> {
-		if (!this.auth.currentUser || !this.auth.currentUser.email) {
-			throw new FirekitAuthError(
-				'auth/no-current-user',
-				'No authenticated user or email unavailable.'
-			);
+		this.initializeServices();
+		if (!this.auth?.currentUser || !this.auth.currentUser.email) {
+			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user with email found.');
 		}
 
 		try {
 			const credential = EmailAuthProvider.credential(this.auth.currentUser.email, currentPassword);
 			await reauthenticateWithCredential(this.auth.currentUser, credential);
 		} catch (error: any) {
-			throw new FirekitAuthError(
-				error.code || 'auth/reauthentication-failed',
-				`Reauthentication failed: ${error.message || 'Unknown error occurred.'}`
-			);
+			this.handleAuthError(error);
 		}
 	}
 
 	/**
-	 * Deletes user account and associated data
-	 * @param {string} [currentPassword] Current password for reauthentication (required for email/password accounts)
+	 * Deletes user account
+	 * @param {string} [currentPassword] Current password for reauthentication
 	 * @returns {Promise<AccountDeletionResult>} Promise resolving to deletion result
 	 *
 	 * @example
@@ -763,11 +829,14 @@ class FirekitAuth {
 	 * const result = await firekitAuth.deleteAccount("currentPassword123");
 	 * if (result.success) {
 	 *   console.log("Account deleted successfully");
+	 * } else {
+	 *   console.error("Deletion failed:", result.message);
 	 * }
 	 * ```
 	 */
 	async deleteAccount(currentPassword?: string): Promise<AccountDeletionResult> {
-		if (!this.auth.currentUser) {
+		this.initializeServices();
+		if (!this.auth?.currentUser) {
 			return {
 				success: false,
 				message: 'No authenticated user found.'
@@ -777,20 +846,20 @@ class FirekitAuth {
 		try {
 			const user = this.auth.currentUser;
 
-			// Reauthenticate if password provided (required for email/password accounts)
+			// Reauthenticate if password provided
 			if (currentPassword) {
 				await this.reauthenticateUser(currentPassword);
 			}
 
 			// Delete user data from Firestore first
 			try {
-				const userRef = doc(this.firestore, 'users', user.uid);
+				const userRef = doc(this.firestore!, 'users', user.uid);
 				await setDoc(userRef, { deleted: true, deletedAt: serverTimestamp() }, { merge: true });
 			} catch (firestoreError) {
-				console.error('Failed to mark user as deleted in Firestore:', firestoreError);
+				console.warn('Failed to update Firestore before account deletion:', firestoreError);
 			}
 
-			// Delete the Firebase Auth account
+			// Delete the user account
 			await deleteUser(user);
 
 			return {
@@ -798,15 +867,6 @@ class FirekitAuth {
 				message: 'Account successfully deleted.'
 			};
 		} catch (error: any) {
-			const code = error.code as AuthErrorCode;
-
-			if (code === AuthErrorCode.REQUIRES_RECENT_LOGIN) {
-				return {
-					success: false,
-					message: 'Please sign in again before deleting your account.'
-				};
-			}
-
 			return {
 				success: false,
 				message: error.message || 'Failed to delete account.'
@@ -814,12 +874,8 @@ class FirekitAuth {
 		}
 	}
 
-	// ========================================
-	// SIGN OUT
-	// ========================================
-
 	/**
-	 * Signs out current user
+	 * Signs out the current user
 	 * @returns {Promise<void>} Promise that resolves when sign-out completes
 	 * @throws {FirekitAuthError} If sign-out fails
 	 *
@@ -830,20 +886,19 @@ class FirekitAuth {
 	 * ```
 	 */
 	async signOut(): Promise<void> {
-		try {
-			this.authState.loading = true;
-			this.notifyStateListeners();
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
 
-			// Clear all reCAPTCHA verifiers
+		try {
+			// Clear reCAPTCHA verifiers
 			this.recaptchaVerifiers.forEach((verifier) => verifier.clear());
 			this.recaptchaVerifiers.clear();
 
 			await signOut(this.auth);
 		} catch (error: any) {
 			this.handleAuthError(error);
-		} finally {
-			this.authState.loading = false;
-			this.notifyStateListeners();
 		}
 	}
 
@@ -856,7 +911,8 @@ class FirekitAuth {
 	 * @returns {boolean} True if user is authenticated
 	 */
 	isAuthenticated(): boolean {
-		return !!this.authState.user && !this.authState.user.isAnonymous;
+		this.initializeServices();
+		return this.authState.user !== null && !this.authState.user.isAnonymous;
 	}
 
 	/**
@@ -864,7 +920,8 @@ class FirekitAuth {
 	 * @returns {boolean} True if user is anonymous
 	 */
 	isAnonymous(): boolean {
-		return !!this.authState.user?.isAnonymous;
+		this.initializeServices();
+		return this.authState.user?.isAnonymous ?? false;
 	}
 
 	/**
@@ -872,15 +929,17 @@ class FirekitAuth {
 	 * @returns {boolean} True if email is verified
 	 */
 	isEmailVerified(): boolean {
-		return !!this.authState.user?.emailVerified;
+		this.initializeServices();
+		return this.authState.user?.emailVerified ?? false;
 	}
 
 	/**
-	 * Gets user's primary email address
+	 * Gets user's email address
 	 * @returns {string | null} User's email or null
 	 */
 	getUserEmail(): string | null {
-		return this.authState.user?.email || null;
+		this.initializeServices();
+		return this.authState.user?.email ?? null;
 	}
 
 	/**
@@ -888,7 +947,8 @@ class FirekitAuth {
 	 * @returns {string | null} User's display name or null
 	 */
 	getUserDisplayName(): string | null {
-		return this.authState.user?.displayName || null;
+		this.initializeServices();
+		return this.authState.user?.displayName ?? null;
 	}
 
 	/**
@@ -896,35 +956,32 @@ class FirekitAuth {
 	 * @returns {string | null} User's photo URL or null
 	 */
 	getUserPhotoURL(): string | null {
-		return this.authState.user?.photoURL || null;
+		this.initializeServices();
+		return this.authState.user?.photoURL ?? null;
 	}
 
 	/**
-	 * Gets user's UID
+	 * Gets user's unique ID
 	 * @returns {string | null} User's UID or null
 	 */
 	getUserId(): string | null {
-		return this.authState.user?.uid || null;
+		this.initializeServices();
+		return this.authState.user?.uid ?? null;
 	}
 
 	/**
-	 * Cleans up all resources
-	 * @returns {Promise<void>} Promise that resolves when cleanup is complete
+	 * Cleans up resources and listeners
+	 * @returns {Promise<void>} Promise that resolves when cleanup completes
 	 */
 	async cleanup(): Promise<void> {
-		// Clear all listeners
-		this.stateListeners.clear();
+		this.initializeServices();
 
-		// Clear all reCAPTCHA verifiers
+		// Clear reCAPTCHA verifiers
 		this.recaptchaVerifiers.forEach((verifier) => verifier.clear());
 		this.recaptchaVerifiers.clear();
 
-		// Reset state
-		this.authState = {
-			user: null,
-			loading: false,
-			initialized: false
-		};
+		// Clear state listeners
+		this.stateListeners.clear();
 	}
 }
 

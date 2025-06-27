@@ -73,8 +73,9 @@ export interface ExtendedUserData extends UserProfile {
  */
 class FirekitUserStore {
 	private static instance: FirekitUserStore;
-	private auth = firebaseService.getAuthInstance()!;
-	private firestore = firebaseService.getDbInstance()!;
+	private auth: ReturnType<typeof firebaseService.getAuthInstance> | null = null;
+	private firestore: ReturnType<typeof firebaseService.getDbInstance> | null = null;
+	private _servicesInitialized = false;
 
 	// ========================================
 	// REACTIVE STATE (Svelte 5 Runes)
@@ -121,13 +122,8 @@ class FirekitUserStore {
 	private _userPhoneNumber = $derived(this._user?.phoneNumber ?? null);
 
 	private constructor() {
-		if (!this.auth) {
-			throw new Error('Firebase Auth instance not available');
-		}
-		if (!this.firestore) {
-			throw new Error('Firestore instance not available');
-		}
-		this.initializeAuthStateListener();
+		// Don't initialize Firebase services in constructor
+		// They will be initialized lazily when needed
 	}
 
 	/**
@@ -142,10 +138,35 @@ class FirekitUserStore {
 	}
 
 	/**
+	 * Initializes Firebase services and auth state listener
+	 * @private
+	 */
+	private initializeServices(): void {
+		if (this._servicesInitialized) return;
+
+		try {
+			this.auth = firebaseService.getAuthInstance();
+			this.firestore = firebaseService.getDbInstance();
+			this._servicesInitialized = true;
+			this.initializeAuthStateListener();
+		} catch (error) {
+			console.error('Failed to initialize Firebase services:', error);
+			this._error = error instanceof Error ? error : new Error(String(error));
+			this._loading = false;
+			this._initialized = true;
+		}
+	}
+
+	/**
 	 * Initializes the authentication state listener
 	 * @private
 	 */
 	private initializeAuthStateListener(): void {
+		if (!this.auth) {
+			console.error('Auth instance not available');
+			return;
+		}
+
 		onAuthStateChanged(
 			this.auth,
 			(firebaseUser) => {
@@ -176,6 +197,9 @@ class FirekitUserStore {
 	 * @private
 	 */
 	private async updateUserInFirestore(user: FirebaseUser): Promise<void> {
+		if (!this.firestore) {
+			throw new Error('Firestore instance not available');
+		}
 		await updateUserInFirestore(this.firestore, user);
 	}
 
@@ -185,61 +209,73 @@ class FirekitUserStore {
 
 	/** Current user profile */
 	get user(): UserProfile | null {
+		this.initializeServices();
 		return this._user;
 	}
 
 	/** Current loading state */
 	get loading(): boolean {
+		this.initializeServices();
 		return this._loading;
 	}
 
 	/** Whether auth has been initialized */
 	get initialized(): boolean {
+		this.initializeServices();
 		return this._initialized;
 	}
 
 	/** Current error state */
 	get error(): Error | null {
+		this.initializeServices();
 		return this._error;
 	}
 
 	/** Whether user is authenticated (not anonymous) */
 	get isAuthenticated(): boolean {
+		this.initializeServices();
 		return this._isAuthenticated;
 	}
 
 	/** Whether user is anonymous */
 	get isAnonymous(): boolean {
+		this.initializeServices();
 		return this._isAnonymous;
 	}
 
 	/** Whether user's email is verified */
 	get isEmailVerified(): boolean {
+		this.initializeServices();
 		return this._isEmailVerified;
 	}
 
 	/** User's email address */
 	get email(): string | null {
+		this.initializeServices();
 		return this._userEmail;
 	}
 
 	/** User's display name */
 	get displayName(): string | null {
+		this.initializeServices();
 		return this._userDisplayName;
 	}
 
 	/** User's photo URL */
 	get photoURL(): string | null {
+		this.initializeServices();
 		return this._userPhotoURL;
 	}
 
 	/** User's unique ID */
 	get uid(): string | null {
+		this.initializeServices();
 		return this._userId;
 	}
 
 	/** User's phone number */
 	get phoneNumber(): string | null {
+		this.initializeServices();
 		return this._userPhoneNumber;
 	}
 
@@ -259,6 +295,11 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updateDisplayName(displayName: string): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		const currentUser = validateCurrentUser(this.auth);
 
 		try {
@@ -290,6 +331,11 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updatePhotoURL(photoURL: string): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		const currentUser = validateCurrentUser(this.auth);
 
 		try {
@@ -324,6 +370,11 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updateProfile(profileData: UserProfileUpdateData): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		const currentUser = validateCurrentUser(this.auth);
 
 		try {
@@ -359,6 +410,11 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updateEmail(newEmail: string): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		const currentUser = validateCurrentUser(this.auth);
 
 		try {
@@ -390,6 +446,11 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updatePassword(newPassword: string): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		const currentUser = validateCurrentUser(this.auth);
 
 		try {
@@ -418,6 +479,11 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async sendEmailVerification(): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		const currentUser = validateCurrentUser(this.auth);
 
 		try {
@@ -439,6 +505,11 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async reloadUser(): Promise<void> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		const currentUser = validateCurrentUser(this.auth);
 
 		try {
@@ -472,6 +543,11 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async getIdToken(forceRefresh: boolean = false): Promise<string> {
+		this.initializeServices();
+		if (!this.auth) {
+			throw new Error('Auth instance not available');
+		}
+
 		const currentUser = validateCurrentUser(this.auth);
 
 		try {
@@ -497,7 +573,8 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async getExtendedUserData(): Promise<ExtendedUserData | null> {
-		if (!this._user?.uid) {
+		this.initializeServices();
+		if (!this._user?.uid || !this.firestore) {
 			return null;
 		}
 
@@ -531,8 +608,12 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async updateExtendedUserData(data: Partial<ExtendedUserData>): Promise<void> {
+		this.initializeServices();
 		if (!this._user?.uid) {
 			throw new FirekitAuthError(AuthErrorCode.USER_NOT_FOUND, 'No authenticated user found.');
+		}
+		if (!this.firestore) {
+			throw new Error('Firestore instance not available');
 		}
 
 		try {
@@ -568,6 +649,7 @@ class FirekitUserStore {
 	 * ```
 	 */
 	async waitForAuth(): Promise<UserProfile | null> {
+		this.initializeServices();
 		return new Promise((resolve) => {
 			if (this._initialized) {
 				resolve(this._user);
@@ -611,6 +693,9 @@ class FirekitUserStore {
 		this._loading = true;
 		this._initialized = false;
 		this._error = null;
+		this._servicesInitialized = false;
+		this.auth = null;
+		this.firestore = null;
 	}
 }
 
