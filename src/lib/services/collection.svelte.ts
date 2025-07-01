@@ -31,8 +31,6 @@ import {
 	type CollectionState,
 	type CollectionOptions,
 	type DocumentChange,
-	type CollectionEvent,
-	type CollectionEventCallback,
 	type CollectionMetadata,
 	type CollectionStats,
 	type CollectionQueryResult,
@@ -144,7 +142,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 	private collectionRef: CollectionReference<T> | null = null;
 	protected queryRef: Query<T> | null = null;
 	private unsubscribe: Unsubscribe | null = null;
-	private eventListeners: Set<CollectionEventCallback<T>> = new Set();
 	protected options: CollectionOptions;
 	private stats: CollectionStats = this.initializeStats();
 	private cache: Map<string, { data: T[]; timestamp: Date }> = new Map();
@@ -217,13 +214,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 				this._initialized = true;
 				this._lastUpdated = cached.timestamp;
 
-				this.emitEvent({
-					type: 'cache_hit',
-					data: cached.data,
-					timestamp: new Date(),
-					path: this.collectionPath
-				});
-
 				this.stats.cacheHitRate = (this.stats.cacheHitRate + 1) / 2;
 			}
 
@@ -251,12 +241,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 	protected setupRealtimeListener(): void {
 		if (!this.queryRef) return;
 
-		this.emitEvent({
-			type: 'loading_started',
-			timestamp: new Date(),
-			path: this.collectionPath
-		});
-
 		const options = {
 			includeMetadataChanges: this.options.includeMetadata || false
 		};
@@ -281,11 +265,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 
 		try {
 			this._loading = true;
-			this.emitEvent({
-				type: 'loading_started',
-				timestamp: new Date(),
-				path: this.collectionPath
-			});
 
 			const startTime = Date.now();
 			const snapshot = await getDocs(this.queryRef);
@@ -351,36 +330,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 				});
 				this.cleanupCache();
 			}
-
-			// Emit events
-			this.emitEvent({
-				type: 'data_changed',
-				data: documents,
-				changes,
-				timestamp: new Date(),
-				path: this.collectionPath
-			});
-
-			this.emitEvent({
-				type: 'loading_finished',
-				data: {
-					documentCount: documents.length,
-					processingTime: Date.now() - startTime
-				},
-				timestamp: new Date(),
-				path: this.collectionPath
-			});
-
-			// Emit individual change events
-			changes.forEach((change) => {
-				this.emitEvent({
-					type: `document_${change.type}` as any,
-					data: change.doc,
-					changes: [change],
-					timestamp: new Date(),
-					path: this.collectionPath
-				});
-			});
 		} catch (error) {
 			this.handleError(error);
 		}
@@ -459,13 +408,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 
 		this._error = collectionError;
 		this._loading = false;
-
-		this.emitEvent({
-			type: 'error',
-			error: collectionError,
-			timestamp: new Date(),
-			path: this.collectionPath
-		});
 
 		console.error('FirekitCollection error:', collectionError);
 	}
@@ -573,19 +515,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 		} catch {
 			return 0;
 		}
-	}
-
-	/**
-	 * Emit event to all listeners
-	 */
-	private emitEvent(event: CollectionEvent<T>): void {
-		this.eventListeners.forEach((callback) => {
-			try {
-				callback(event);
-			} catch (error) {
-				console.error('Error in collection event listener:', error);
-			}
-		});
 	}
 
 	// ========================================
@@ -899,25 +828,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 		this.stats = this.initializeStats();
 	}
 
-	// ========================================
-	// EVENT MANAGEMENT
-	// ========================================
-
-	/**
-	 * Add event listener
-	 */
-	addEventListener(callback: CollectionEventCallback<T>): () => void {
-		this.eventListeners.add(callback);
-		return () => this.eventListeners.delete(callback);
-	}
-
-	/**
-	 * Remove all event listeners
-	 */
-	clearEventListeners(): void {
-		this.eventListeners.clear();
-	}
-
 	/**
 	 * Wait for collection to initialize
 	 */
@@ -928,12 +838,19 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 				return;
 			}
 
-			const unsubscribe = this.addEventListener((event) => {
-				if (event.type === 'data_changed' || event.type === 'error') {
-					unsubscribe();
+			// Poll for initialization since we removed events
+			const checkInterval = setInterval(() => {
+				if (this._initialized) {
+					clearInterval(checkInterval);
 					resolve(this._data);
 				}
-			});
+			}, 100);
+
+			// Timeout after 10 seconds
+			setTimeout(() => {
+				clearInterval(checkInterval);
+				resolve(this._data);
+			}, 10000);
 		});
 	}
 
@@ -953,9 +870,6 @@ class FirekitCollection<T extends DocumentData = DocumentData> {
 
 		// Clear cache
 		this.cache.clear();
-
-		// Clear event listeners
-		this.eventListeners.clear();
 
 		// Reset state
 		this._data = [];

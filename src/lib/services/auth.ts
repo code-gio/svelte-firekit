@@ -26,6 +26,7 @@ import {
 	reload,
 	getIdToken,
 	onAuthStateChanged,
+	getAdditionalUserInfo,
 	type User
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -36,6 +37,12 @@ import {
 	type PasswordUpdateResult,
 	type AccountDeletionResult,
 	type PhoneVerificationResult,
+	type SignInResult,
+	type RegistrationResult,
+	type OAuthSignInResult,
+	type ProfileUpdateResult,
+	type EmailVerificationResult,
+	type PasswordResetResult,
 	AuthErrorCode,
 	FirekitAuthError
 } from '../types/auth.js';
@@ -271,20 +278,21 @@ class FirekitAuth {
 	 * Signs in user with email and password
 	 * @param {string} email User's email address
 	 * @param {string} password User's password
-	 * @returns {Promise<UserProfile>} Promise resolving to user profile
+	 * @returns {Promise<SignInResult>} Promise resolving to sign-in result
 	 * @throws {FirekitAuthError} If sign-in fails
 	 *
 	 * @example
 	 * ```typescript
 	 * try {
-	 *   const user = await firekitAuth.signInWithEmail("user@example.com", "password123");
-	 *   console.log("Signed in:", user.displayName);
+	 *   const result = await firekitAuth.signInWithEmail("user@example.com", "password123");
+	 *   console.log("Signed in:", result.user.displayName);
+	 *   console.log("Is new user:", result.isNewUser);
 	 * } catch (error) {
 	 *   console.error("Sign-in failed:", error.message);
 	 * }
 	 * ```
 	 */
-	async signInWithEmail(email: string, password: string): Promise<UserProfile> {
+	async signInWithEmail(email: string, password: string): Promise<SignInResult> {
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -296,7 +304,18 @@ class FirekitAuth {
 			const userCredential = await signInWithEmailAndPassword(this.auth, email, password);
 			await this.updateUserInFirestore(userCredential.user);
 
-			return this.mapFirebaseUserToProfile(userCredential.user);
+			const userProfile = this.mapFirebaseUserToProfile(userCredential.user);
+			const additionalUserInfo = getAdditionalUserInfo(userCredential);
+			const isNewUser = additionalUserInfo?.isNewUser ?? false;
+
+			return {
+				success: true,
+				user: userProfile,
+				method: 'email',
+				timestamp: new Date(),
+				isNewUser,
+				requiresEmailVerification: !userProfile.emailVerified
+			};
 		} catch (error: any) {
 			this.handleAuthError(error);
 		} finally {
@@ -307,14 +326,16 @@ class FirekitAuth {
 
 	/**
 	 * Signs in user with Google popup
-	 * @returns {Promise<UserProfile>} Promise resolving to user profile
+	 * @returns {Promise<OAuthSignInResult>} Promise resolving to OAuth sign-in result
 	 * @throws {FirekitAuthError} If sign-in fails
 	 *
 	 * @example
 	 * ```typescript
 	 * try {
-	 *   const user = await firekitAuth.signInWithGoogle();
-	 *   console.log("Signed in with Google:", user.email);
+	 *   const result = await firekitAuth.signInWithGoogle();
+	 *   console.log("Signed in with Google:", result.user.email);
+	 *   console.log("Is new user:", result.isNewUser);
+	 *   console.log("Access token:", result.accessToken);
 	 * } catch (error) {
 	 *   if (error.code === 'auth/popup-closed-by-user') {
 	 *     console.log("User cancelled sign-in");
@@ -322,7 +343,7 @@ class FirekitAuth {
 	 * }
 	 * ```
 	 */
-	async signInWithGoogle(): Promise<UserProfile> {
+	async signInWithGoogle(): Promise<OAuthSignInResult> {
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -336,7 +357,18 @@ class FirekitAuth {
 			const result = await signInWithPopup(this.auth, provider);
 			await this.updateUserInFirestore(result.user);
 
-			return this.mapFirebaseUserToProfile(result.user);
+			const userProfile = this.mapFirebaseUserToProfile(result.user);
+			const additionalUserInfo = getAdditionalUserInfo(result);
+			const isNewUser = additionalUserInfo?.isNewUser ?? false;
+
+			return {
+				success: true,
+				user: userProfile,
+				method: 'google',
+				timestamp: new Date(),
+				isNewUser,
+				provider: 'google'
+			};
 		} catch (error: any) {
 			this.handleAuthError(error);
 		} finally {
@@ -347,10 +379,10 @@ class FirekitAuth {
 
 	/**
 	 * Signs in user with Facebook popup
-	 * @returns {Promise<UserProfile>} Promise resolving to user profile
+	 * @returns {Promise<OAuthSignInResult>} Promise resolving to OAuth sign-in result
 	 * @throws {FirekitAuthError} If sign-in fails
 	 */
-	async signInWithFacebook(): Promise<UserProfile> {
+	async signInWithFacebook(): Promise<OAuthSignInResult> {
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -364,7 +396,18 @@ class FirekitAuth {
 			const result = await signInWithPopup(this.auth, provider);
 			await this.updateUserInFirestore(result.user);
 
-			return this.mapFirebaseUserToProfile(result.user);
+			const userProfile = this.mapFirebaseUserToProfile(result.user);
+			const additionalUserInfo = getAdditionalUserInfo(result);
+			const isNewUser = additionalUserInfo?.isNewUser ?? false;
+
+			return {
+				success: true,
+				user: userProfile,
+				method: 'facebook',
+				timestamp: new Date(),
+				isNewUser,
+				provider: 'facebook'
+			};
 		} catch (error: any) {
 			this.handleAuthError(error);
 		} finally {
@@ -375,10 +418,10 @@ class FirekitAuth {
 
 	/**
 	 * Signs in user with Apple popup
-	 * @returns {Promise<UserProfile>} Promise resolving to user profile
+	 * @returns {Promise<OAuthSignInResult>} Promise resolving to OAuth sign-in result
 	 * @throws {FirekitAuthError} If sign-in fails
 	 */
-	async signInWithApple(): Promise<UserProfile> {
+	async signInWithApple(): Promise<OAuthSignInResult> {
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -392,7 +435,18 @@ class FirekitAuth {
 			const result = await signInWithPopup(this.auth, provider);
 			await this.updateUserInFirestore(result.user);
 
-			return this.mapFirebaseUserToProfile(result.user);
+			const userProfile = this.mapFirebaseUserToProfile(result.user);
+			const additionalUserInfo = getAdditionalUserInfo(result);
+			const isNewUser = additionalUserInfo?.isNewUser ?? false;
+
+			return {
+				success: true,
+				user: userProfile,
+				method: 'apple',
+				timestamp: new Date(),
+				isNewUser,
+				provider: 'apple'
+			};
 		} catch (error: any) {
 			this.handleAuthError(error);
 		} finally {
@@ -403,16 +457,17 @@ class FirekitAuth {
 
 	/**
 	 * Signs in user anonymously
-	 * @returns {Promise<UserProfile>} Promise resolving to user profile
+	 * @returns {Promise<SignInResult>} Promise resolving to sign-in result
 	 * @throws {FirekitAuthError} If sign-in fails
 	 *
 	 * @example
 	 * ```typescript
-	 * const user = await firekitAuth.signInAnonymously();
-	 * console.log("Anonymous user:", user.uid);
+	 * const result = await firekitAuth.signInAnonymously();
+	 * console.log("Anonymous user:", result.user.uid);
+	 * console.log("Is new user:", result.isNewUser);
 	 * ```
 	 */
-	async signInAnonymously(): Promise<UserProfile> {
+	async signInAnonymously(): Promise<SignInResult> {
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -424,7 +479,17 @@ class FirekitAuth {
 			const result = await firebaseSignInAnonymously(this.auth);
 			await this.updateUserInFirestore(result.user);
 
-			return this.mapFirebaseUserToProfile(result.user);
+			const userProfile = this.mapFirebaseUserToProfile(result.user);
+			const additionalUserInfo = getAdditionalUserInfo(result);
+			const isNewUser = additionalUserInfo?.isNewUser ?? false;
+
+			return {
+				success: true,
+				user: userProfile,
+				method: 'anonymous',
+				timestamp: new Date(),
+				isNewUser
+			};
 		} catch (error: any) {
 			this.handleAuthError(error);
 		} finally {
@@ -485,11 +550,22 @@ class FirekitAuth {
 
 			return {
 				verificationId: confirmationResult.verificationId,
-				confirm: async (verificationCode: string): Promise<UserProfile> => {
+				confirm: async (verificationCode: string): Promise<SignInResult> => {
 					try {
 						const userCredential = await confirmationResult.confirm(verificationCode);
 						await this.updateUserInFirestore(userCredential.user);
-						return this.mapFirebaseUserToProfile(userCredential.user);
+
+						const userProfile = this.mapFirebaseUserToProfile(userCredential.user);
+						const additionalUserInfo = getAdditionalUserInfo(userCredential);
+						const isNewUser = additionalUserInfo?.isNewUser ?? false;
+
+						return {
+							success: true,
+							user: userProfile,
+							method: 'phone',
+							timestamp: new Date(),
+							isNewUser
+						};
 					} catch (error: any) {
 						this.handleAuthError(error);
 					} finally {
@@ -517,17 +593,18 @@ class FirekitAuth {
 	 * @param {string} password User's password
 	 * @param {string} [displayName] User's display name
 	 * @param {boolean} [sendVerification=true] Whether to send email verification
-	 * @returns {Promise<UserProfile>} Promise resolving to user profile
+	 * @returns {Promise<RegistrationResult>} Promise resolving to registration result
 	 * @throws {FirekitAuthError} If registration fails
 	 *
 	 * @example
 	 * ```typescript
-	 * const user = await firekitAuth.registerWithEmail(
+	 * const result = await firekitAuth.registerWithEmail(
 	 *   "user@example.com",
 	 *   "password123",
 	 *   "John Doe"
 	 * );
-	 * console.log("Registered:", user.displayName);
+	 * console.log("Registered:", result.user.displayName);
+	 * console.log("Email verification sent:", result.emailVerificationSent);
 	 * ```
 	 */
 	async registerWithEmail(
@@ -535,7 +612,7 @@ class FirekitAuth {
 		password: string,
 		displayName?: string,
 		sendVerification: boolean = true
-	): Promise<UserProfile> {
+	): Promise<RegistrationResult> {
 		if (!this.auth) {
 			throw new Error('Auth instance not available');
 		}
@@ -559,7 +636,16 @@ class FirekitAuth {
 
 			await this.updateUserInFirestore(user);
 
-			return this.mapFirebaseUserToProfile(user);
+			const userProfile = this.mapFirebaseUserToProfile(user);
+
+			return {
+				success: true,
+				user: userProfile,
+				method: 'email',
+				timestamp: new Date(),
+				emailVerificationSent: sendVerification,
+				requiresEmailVerification: !userProfile.emailVerified
+			};
 		} catch (error: any) {
 			this.handleAuthError(error);
 		} finally {

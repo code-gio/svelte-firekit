@@ -1,6 +1,9 @@
 // Auth Types
 export * from './auth.js';
 
+// Analytics Types
+export * from './analytics.js';
+
 // Firebase Types
 export * from './firebase.js';
 

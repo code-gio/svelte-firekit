@@ -45,90 +45,64 @@
 	} = $props();
 
 	// Get Firestore instance only in browser environment
-	let firestore: Firestore | null = $state(null);
-	let collectionRef: CollectionReference | Query | null = $state(null);
-	let collectionService: ReturnType<typeof firekitCollection> | null = $state(null);
+	let firestore = $derived(browser ? firebaseService.getDbInstance() : null);
 
-	// Track collection state
-	let collectionState = $state({
-		loading: true,
-		data: startWith ?? ([] as DocumentData[]),
-		error: null as Error | null,
-		count: startWith?.length ?? 0
+	// Create collection reference if path string is provided
+	let collectionRef = $derived(
+		firestore && typeof ref === 'string'
+			? collection(firestore, ref)
+			: (ref as CollectionReference | Query)
+	);
+
+	// Create collection service with derived path
+	let collectionPath = $derived(typeof ref === 'string' ? ref : (ref as CollectionReference).path);
+	let collectionService = $state<ReturnType<typeof firekitCollection> | null>(null);
+
+	// Track collection state using derived computations
+	let collectionState = $derived({
+		loading: !browser
+			? false
+			: !firestore
+				? false
+				: !collectionService
+					? true
+					: collectionService.loading,
+		data: !browser
+			? (startWith ?? [])
+			: !firestore
+				? []
+				: !collectionService
+					? (startWith ?? [])
+					: collectionService.data,
+		error: !browser
+			? null
+			: !firestore
+				? new Error('Firestore instance not available')
+				: !collectionService
+					? null
+					: collectionService.error,
+		count: !browser
+			? (startWith?.length ?? 0)
+			: !firestore
+				? 0
+				: !collectionService
+					? (startWith?.length ?? 0)
+					: collectionService.size
 	});
 
-	// Initialize Firestore and collection service
+	// Set up collection service
 	$effect(() => {
-		if (!browser) {
-			collectionState = {
-				loading: false,
-				data: startWith ?? [],
-				error: null,
-				count: startWith?.length ?? 0
-			};
+		if (!browser || !collectionPath) {
+			collectionService = null;
 			return;
 		}
 
-		// Initialize Firestore
-		firestore = firebaseService.getDbInstance();
-		if (!firestore) {
-			collectionState = {
-				loading: false,
-				data: [],
-				error: new Error('Firestore instance not available'),
-				count: 0
-			};
-			return;
-		}
-
-		// Create collection reference if path string is provided
-		collectionRef =
-			typeof ref === 'string' ? collection(firestore, ref) : (ref as CollectionReference | Query);
-
-		// Create collection service
-		const path = typeof ref === 'string' ? ref : (ref as CollectionReference).path;
-		collectionService = firekitCollection(path, queryConstraints);
-
-		// Set up event listener for real-time updates
-		const unsubscribe = collectionService.addEventListener((event) => {
-			if (event.type === 'data_changed') {
-				collectionState = {
-					loading: false,
-					data: event.data || [],
-					error: null,
-					count: event.data?.length || 0
-				};
-			} else if (event.type === 'error') {
-				collectionState = {
-					loading: false,
-					data: [],
-					error: event.error || null,
-					count: 0
-				};
-			} else if (event.type === 'loading_started') {
-				collectionState = {
-					...collectionState,
-					loading: true
-				};
-			} else if (event.type === 'loading_finished') {
-				collectionState = {
-					...collectionState,
-					loading: false
-				};
-			}
-		});
-
-		// Set initial state from service
-		collectionState = {
-			loading: collectionService.loading,
-			data: collectionService.data,
-			error: collectionService.error,
-			count: collectionService.size
-		};
+		// Create new service when path or constraints change
+		const newService = firekitCollection(collectionPath, queryConstraints);
+		collectionService = newService;
 
 		return () => {
-			unsubscribe();
-			collectionService?.dispose();
+			newService?.dispose();
 		};
 	});
 </script>

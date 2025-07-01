@@ -41,6 +41,51 @@ export interface AuthState {
 }
 
 /**
+ * Base authentication result interface
+ */
+export interface AuthResult {
+	success: boolean;
+	user: UserProfile;
+	method: AuthMethodType;
+	timestamp: Date;
+	additionalData?: Record<string, any>;
+}
+
+/**
+ * Sign-in result interface
+ */
+export interface SignInResult extends AuthResult {
+	isNewUser: boolean;
+	requiresEmailVerification?: boolean;
+	requiresPhoneVerification?: boolean;
+}
+
+/**
+ * Registration result interface
+ */
+export interface RegistrationResult extends AuthResult {
+	emailVerificationSent: boolean;
+	requiresEmailVerification: boolean;
+}
+
+/**
+ * OAuth sign-in result interface
+ */
+export interface OAuthSignInResult extends SignInResult {
+	provider: OAuthProviderType;
+	accessToken?: string;
+	refreshToken?: string;
+}
+
+/**
+ * Phone verification result interface
+ */
+export interface PhoneVerificationResult {
+	verificationId: string;
+	confirm: (code: string) => Promise<SignInResult>;
+}
+
+/**
  * Password update result interface
  */
 export interface PasswordUpdateResult {
@@ -55,14 +100,6 @@ export interface PasswordUpdateResult {
 export interface AccountDeletionResult {
 	success: boolean;
 	message: string;
-}
-
-/**
- * Phone verification result interface
- */
-export interface PhoneVerificationResult {
-	verificationId: string;
-	confirm: (code: string) => Promise<UserProfile>;
 }
 
 /**
@@ -81,6 +118,34 @@ export interface UserRegistrationData {
 export interface UserProfileUpdateData {
 	displayName?: string;
 	photoURL?: string;
+}
+
+/**
+ * Profile update result interface
+ */
+export interface ProfileUpdateResult {
+	success: boolean;
+	user: UserProfile;
+	updatedFields: string[];
+	message: string;
+}
+
+/**
+ * Email verification result interface
+ */
+export interface EmailVerificationResult {
+	success: boolean;
+	message: string;
+	emailSent: boolean;
+}
+
+/**
+ * Password reset result interface
+ */
+export interface PasswordResetResult {
+	success: boolean;
+	message: string;
+	emailSent: boolean;
 }
 
 /**

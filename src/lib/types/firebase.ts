@@ -4,6 +4,7 @@ import type { Auth } from 'firebase/auth';
 import type { Functions } from 'firebase/functions';
 import type { Database } from 'firebase/database';
 import type { FirebaseStorage } from 'firebase/storage';
+import type { Analytics } from 'firebase/analytics';
 
 /**
  * Type definition for required Firebase environment variables
@@ -58,6 +59,7 @@ export interface FirebaseServiceInstance {
 	functions: Functions | null;
 	database: Database | null;
 	storage: FirebaseStorage | null;
+	analytics: Analytics | null;
 	status: FirebaseServiceStatus;
 	initializationError: Error | null;
 	isBrowser: boolean;

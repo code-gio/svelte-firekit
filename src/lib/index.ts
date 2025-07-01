@@ -10,6 +10,9 @@ export { firekitUser } from './services/user.svelte.js';
 export { firekitAuth } from './services/auth.js';
 export { firekitPresence } from './services/presence.svelte.js';
 
+// analytics services
+export { firekitAnalytics } from './services/analytics.js';
+
 // document services
 export { firekitDoc, firekitDocOnce, firekitDocWithMetadata } from './services/document.svelte.js';
 

@@ -155,44 +155,6 @@ export interface DocumentChange<T> {
 }
 
 /**
- * Collection event types
- */
-export type CollectionEventType =
-	| 'data_changed'
-	| 'document_added'
-	| 'document_modified'
-	| 'document_removed'
-	| 'error'
-	| 'loading_started'
-	| 'loading_finished'
-	| 'query_changed'
-	| 'cache_hit'
-	| 'cache_miss';
-
-/**
- * Collection event interface
- */
-export interface CollectionEvent<T> {
-	/** Event type */
-	type: CollectionEventType;
-	/** Event data */
-	data?: any;
-	/** Document changes */
-	changes?: DocumentChange<T>[];
-	/** Error if applicable */
-	error?: CollectionError;
-	/** Event timestamp */
-	timestamp: Date;
-	/** Collection path */
-	path?: string;
-}
-
-/**
- * Collection event callback function type
- */
-export type CollectionEventCallback<T> = (event: CollectionEvent<T>) => void;
-
-/**
  * Collection metadata interface
  */
 export interface CollectionMetadata {

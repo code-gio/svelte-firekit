@@ -119,43 +119,6 @@ export interface PresenceStats {
 }
 
 /**
- * Presence event types
- */
-export type PresenceEventType =
-	| 'status_change'
-	| 'session_created'
-	| 'session_updated'
-	| 'session_expired'
-	| 'location_update'
-	| 'location_error'
-	| 'error'
-	| 'init'
-	| 'disconnect'
-	| 'reconnect'
-	| 'consent_requested'
-	| 'consent_granted'
-	| 'consent_denied'
-	| 'device_detected'
-	| 'visibility_change';
-
-/**
- * Presence event structure
- */
-export interface PresenceEvent {
-	type: PresenceEventType;
-	data?: any;
-	error?: Error;
-	timestamp: number;
-	sessionId?: string;
-	userId?: string;
-}
-
-/**
- * Presence event callback function type
- */
-export type PresenceEventCallback = (event: PresenceEvent) => void;
-
-/**
  * Geolocation provider interface
  */
 export interface GeolocationProvider {
@@ -184,7 +147,6 @@ export interface PresenceService {
 	getCurrentSession(): SessionData | null;
 	getAllSessions(): SessionData[];
 	getPresenceStats(): PresenceStats;
-	addEventListener(callback: PresenceEventCallback): () => void;
 	dispose(): Promise<void>;
 }
 

@@ -13,8 +13,6 @@ import {
 	type Location,
 	type DeviceInfo,
 	type SessionData,
-	type PresenceEvent,
-	type PresenceEventCallback,
 	type PresenceStats,
 	PresenceErrorCode,
 	PresenceError
@@ -283,11 +281,6 @@ class DeviceInfoService {
  *   sessionTTL: 30 * 60 * 1000
  * });
  *
- * // Listen to events
- * const unsubscribe = firekitPresence.addEventListener((event) => {
- *   console.log('Presence event:', event);
- * });
- *
  * // Access reactive state
  * $: console.log('Status:', firekitPresence.status);
  * ```
@@ -302,7 +295,6 @@ class FirekitPresence {
 
 	private geolocationService: GeolocationService | null = null;
 	private connectedListener: (() => void) | null = null;
-	private eventListeners: Set<PresenceEventCallback> = new Set();
 	private currentUser: any = null;
 
 	// Reactive state using Svelte 5 runes
@@ -397,13 +389,7 @@ class FirekitPresence {
 				this.geolocationService = new GeolocationService(this.config.geolocation);
 
 				if (this.config.geolocation.requireConsent) {
-					this.emitEvent({ type: 'consent_requested', timestamp: Date.now() });
 					const hasConsent = await this.geolocationService.requestConsent();
-
-					this.emitEvent({
-						type: hasConsent ? 'consent_granted' : 'consent_denied',
-						timestamp: Date.now()
-					});
 				}
 
 				// Start location tracking if consent granted
@@ -416,11 +402,6 @@ class FirekitPresence {
 			await this.setupConnectionMonitoring();
 
 			this._initialized = true;
-			this.emitEvent({
-				type: 'init',
-				data: { userId: user.uid, config: this.config },
-				timestamp: Date.now()
-			});
 		} catch (error) {
 			this._error =
 				error instanceof PresenceError
@@ -430,11 +411,6 @@ class FirekitPresence {
 							`Failed to initialize presence service: ${(error as Error).message}`,
 							error
 						);
-			this.emitEvent({
-				type: 'error',
-				error: this._error,
-				timestamp: Date.now()
-			});
 			throw this._error;
 		} finally {
 			this._loading = false;
@@ -548,14 +524,6 @@ class FirekitPresence {
 					...(device && { device }),
 					...(this.config.customMetadata && { metadata: this.config.customMetadata })
 				};
-
-				this.emitEvent({
-					type: 'session_created',
-					data: { session },
-					timestamp: Date.now(),
-					sessionId: session.id,
-					userId: session.userId
-				});
 			} else {
 				// Update existing session
 				session = {
@@ -565,14 +533,6 @@ class FirekitPresence {
 					lastActivity: new Date().toISOString(),
 					...(location && { location })
 				};
-
-				this.emitEvent({
-					type: 'session_updated',
-					data: { session, previousStatus: this._currentSession.status },
-					timestamp: Date.now(),
-					sessionId: session.id,
-					userId: session.userId
-				});
 			}
 
 			// Save session to Firebase
@@ -586,25 +546,6 @@ class FirekitPresence {
 
 			// Load and update all sessions
 			await this.loadSessions();
-
-			this.emitEvent({
-				type: 'status_change',
-				data: { status, session, location },
-				timestamp: Date.now(),
-				sessionId: session.id,
-				userId: session.userId
-			});
-
-			// Emit location update if location changed
-			if (location) {
-				this.emitEvent({
-					type: 'location_update',
-					data: { location, session },
-					timestamp: Date.now(),
-					sessionId: session.id,
-					userId: session.userId
-				});
-			}
 		} catch (error) {
 			this._error =
 				error instanceof PresenceError
@@ -614,11 +555,6 @@ class FirekitPresence {
 							`Failed to set presence: ${(error as Error).message}`,
 							error
 						);
-			this.emitEvent({
-				type: 'error',
-				error: this._error,
-				timestamp: Date.now()
-			});
 			throw this._error;
 		}
 	}
@@ -647,21 +583,13 @@ class FirekitPresence {
 					const expiredSessions = sessions.filter((session) => session.lastSeen < cutoffTime);
 					sessions = sessions.filter((session) => session.lastSeen >= cutoffTime);
 
-					// Remove stale sessions from database and emit events
+					// Remove stale sessions from database
 					for (const expiredSession of expiredSessions) {
 						const staleSessionRef = ref(
 							db,
 							`${sessionPath}/${this.currentUser.uid}/sessions/${expiredSession.id}`
 						);
 						await set(staleSessionRef, null);
-
-						this.emitEvent({
-							type: 'session_expired',
-							data: { session: expiredSession },
-							timestamp: Date.now(),
-							sessionId: expiredSession.id,
-							userId: expiredSession.userId
-						});
 					}
 				}
 
@@ -767,33 +695,6 @@ class FirekitPresence {
 	}
 
 	// ========================================
-	// EVENT MANAGEMENT
-	// ========================================
-
-	/**
-	 * Add event listener
-	 * @param callback Event callback function
-	 * @returns Cleanup function to remove listener
-	 */
-	addEventListener(callback: PresenceEventCallback): () => void {
-		this.eventListeners.add(callback);
-		return () => this.eventListeners.delete(callback);
-	}
-
-	/**
-	 * Emit event to all listeners
-	 */
-	private emitEvent(event: PresenceEvent): void {
-		this.eventListeners.forEach((callback) => {
-			try {
-				callback(event);
-			} catch (error) {
-				console.error('Error in presence event listener:', error);
-			}
-		});
-	}
-
-	// ========================================
 	// CLEANUP
 	// ========================================
 
@@ -819,9 +720,6 @@ class FirekitPresence {
 			this.connectedListener = null;
 		}
 
-		// Clear event listeners
-		this.eventListeners.clear();
-
 		// Reset state
 		this._initialized = false;
 		this._status = 'offline';
@@ -829,11 +727,6 @@ class FirekitPresence {
 		this._error = null;
 		this._currentSession = null;
 		this._sessions = [];
-
-		this.emitEvent({
-			type: 'disconnect',
-			timestamp: Date.now()
-		});
 	}
 }
 
@@ -848,11 +741,6 @@ class FirekitPresence {
  * await firekitPresence.initialize(user, {
  *   geolocation: { enabled: true, type: 'browser' },
  *   sessionTTL: 30 * 60 * 1000
- * });
- *
- * // Listen to events
- * const unsubscribe = firekitPresence.addEventListener((event) => {
- *   console.log('Presence event:', event.type, event.data);
  * });
  * ```
  */

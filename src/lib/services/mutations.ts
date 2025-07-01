@@ -36,8 +36,6 @@ import {
 	type ExistenceCheckResult,
 	type BulkMutationConfig,
 	type ValidationResult,
-	type MutationEvent,
-	type MutationEventCallback,
 	type MutationAnalytics,
 	type TimestampFields,
 	MutationOperationType,
@@ -68,15 +66,9 @@ import { CacheSource } from '../types/document.js';
  *   { type: 'create', path: 'users', data: userData },
  *   { type: 'update', path: 'profiles/123', data: profileUpdate }
  * ]);
- *
- * // Listen to mutation events
- * const unsubscribe = firekitDocMutations.addEventListener((event) => {
- *   console.log('Mutation event:', event.type, event.data);
- * });
  * ```
  */
 class FirekitDocumentMutations {
-	private eventListeners: Set<MutationEventCallback> = new Set();
 	private analytics: MutationAnalytics = this.initializeAnalytics();
 	private defaultOptions: MutationOptions = {
 		timestamps: true,
@@ -187,14 +179,6 @@ class FirekitDocumentMutations {
 		this.analytics.failedMutations++;
 		this.updateErrorAnalytics(mutationError);
 
-		// Emit error event
-		this.emitEvent({
-			type: 'mutation_error',
-			error: mutationError,
-			timestamp: new Date(),
-			userId: firekitUser.uid ?? 'anonymous'
-		});
-
 		console.error('FirekitDocumentMutations error:', mutationError);
 		return mutationError;
 	}
@@ -261,19 +245,6 @@ class FirekitDocumentMutations {
 	}
 
 	/**
-	 * Emit event to all listeners
-	 */
-	private emitEvent(event: MutationEvent): void {
-		this.eventListeners.forEach((callback) => {
-			try {
-				callback(event);
-			} catch (error) {
-				console.error('Error in mutation event listener:', error);
-			}
-		});
-	}
-
-	/**
 	 * Execute operation with retry logic
 	 */
 	private async executeWithRetry<T>(
@@ -289,12 +260,6 @@ class FirekitDocumentMutations {
 		while (attempt < retryConfig.maxAttempts!) {
 			try {
 				if (attempt > 0) {
-					this.emitEvent({
-						type: 'mutation_retry',
-						data: { attempt, maxAttempts: retryConfig.maxAttempts, operation: operationName, path },
-						timestamp: new Date(),
-						userId: firekitUser.uid ?? 'anonymous'
-					});
 					this.analytics.retryStats.totalRetries++;
 				}
 
@@ -374,14 +339,6 @@ class FirekitDocumentMutations {
 		const mergedOptions = { ...this.defaultOptions, ...options };
 
 		try {
-			// Emit start event
-			this.emitEvent({
-				type: 'mutation_start',
-				data: { operation: 'create', path: collectionPath, data },
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
-
 			// Validate data if requested
 			if (mergedOptions.validate) {
 				const validation = this.validateData(data, mergedOptions.validator);
@@ -449,14 +406,6 @@ class FirekitDocumentMutations {
 			this.analytics.successfulMutations++;
 			this.updateOperationAnalytics(MutationOperationType.CREATE, Date.now() - startTime, true);
 
-			// Emit success event
-			this.emitEvent({
-				type: 'mutation_success',
-				data: { operation: 'create', path: collectionPath, result },
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
-
 			return result;
 		} catch (error: any) {
 			this.analytics.totalMutations++;
@@ -509,13 +458,6 @@ class FirekitDocumentMutations {
 		const mergedOptions = { ...this.defaultOptions, ...options };
 
 		try {
-			this.emitEvent({
-				type: 'mutation_start',
-				data: { operation: 'set', path, data },
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
-
 			if (mergedOptions.validate) {
 				const validation = this.validateData(data, mergedOptions.validator);
 				if (!validation.valid) {
@@ -571,13 +513,6 @@ class FirekitDocumentMutations {
 			this.analytics.successfulMutations++;
 			this.updateOperationAnalytics(MutationOperationType.SET, Date.now() - startTime, true);
 
-			this.emitEvent({
-				type: 'mutation_success',
-				data: { operation: 'set', path, result },
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
-
 			return result;
 		} catch (error: any) {
 			this.analytics.totalMutations++;
@@ -627,13 +562,6 @@ class FirekitDocumentMutations {
 		const mergedOptions = { ...this.defaultOptions, ...options };
 
 		try {
-			this.emitEvent({
-				type: 'mutation_start',
-				data: { operation: 'update', path, data },
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
-
 			if (mergedOptions.validate) {
 				const validation = this.validateData(data, mergedOptions.validator);
 				if (!validation.valid) {
@@ -663,13 +591,13 @@ class FirekitDocumentMutations {
 						...data,
 						...(mergedOptions.timestamps && this.getTimestampData(false))
 					} as PartialWithFieldValue<T>;
-
+					// @ts-ignore
 					await updateDoc(docRef, dataToUpdate);
 
 					return {
 						success: true,
 						id: docRef.id,
-						data: dataToUpdate,
+						data: dataToUpdate as Partial<T>,
 						metadata: {
 							timestamp: new Date(),
 							operation: MutationOperationType.UPDATE,
@@ -687,13 +615,6 @@ class FirekitDocumentMutations {
 			this.analytics.totalMutations++;
 			this.analytics.successfulMutations++;
 			this.updateOperationAnalytics(MutationOperationType.UPDATE, Date.now() - startTime, true);
-
-			this.emitEvent({
-				type: 'mutation_success',
-				data: { operation: 'update', path, result },
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
 
 			return result;
 		} catch (error: any) {
@@ -738,13 +659,6 @@ class FirekitDocumentMutations {
 		const mergedOptions = { ...this.defaultOptions, ...options };
 
 		try {
-			this.emitEvent({
-				type: 'mutation_start',
-				data: { operation: 'delete', path },
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
-
 			const result = await this.executeWithRetry(
 				async () => {
 					const firestore = firebaseService.getDbInstance();
@@ -778,13 +692,6 @@ class FirekitDocumentMutations {
 			this.analytics.totalMutations++;
 			this.analytics.successfulMutations++;
 			this.updateOperationAnalytics(MutationOperationType.DELETE, Date.now() - startTime, true);
-
-			this.emitEvent({
-				type: 'mutation_success',
-				data: { operation: 'delete', path, result },
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
 
 			return result;
 		} catch (error: any) {
@@ -910,18 +817,12 @@ class FirekitDocumentMutations {
 	async batch(operations: BatchOperation[], config: BulkMutationConfig = {}): Promise<BatchResult> {
 		const startTime = Date.now();
 		const batchConfig = {
-			batchSize: 500,
 			parallel: false,
 			failFast: true,
-			...config
+			...config,
+			// Enforce Firestore limit of 500 operations per batch
+			batchSize: Math.min(config.batchSize || 500, 500)
 		};
-
-		this.emitEvent({
-			type: 'batch_start',
-			data: { operationCount: operations.length, config: batchConfig },
-			timestamp: new Date(),
-			userId: firekitUser.uid ?? 'anonymous'
-		});
 
 		try {
 			const firestore = firebaseService.getDbInstance();
@@ -979,16 +880,10 @@ class FirekitDocumentMutations {
 
 				results.push(...batchResults);
 
-				// Emit progress
-				const completed = (i + 1) * batchConfig.batchSize!;
-				this.emitEvent({
-					type: 'batch_progress',
-					data: { completed: Math.min(completed, operations.length), total: operations.length },
-					timestamp: new Date(),
-					userId: firekitUser.uid ?? 'anonymous'
-				});
-
-				batchConfig.onProgress?.(Math.min(completed, operations.length), operations.length);
+				batchConfig.onProgress?.(
+					Math.min((i + 1) * batchConfig.batchSize!, operations.length),
+					operations.length
+				);
 			}
 
 			const batchResult: BatchResult = {
@@ -1005,13 +900,6 @@ class FirekitDocumentMutations {
 					strategy: batchConfig.parallel ? 'parallel' : 'sequential'
 				}
 			};
-
-			this.emitEvent({
-				type: 'batch_complete',
-				data: batchResult,
-				timestamp: new Date(),
-				userId: firekitUser.uid ?? 'anonymous'
-			});
 
 			return batchResult;
 		} catch (error: any) {
@@ -1031,7 +919,40 @@ class FirekitDocumentMutations {
 		const options = { ...this.defaultOptions, ...operation.options };
 
 		switch (operation.type) {
-			case 'create':
+			case 'create': {
+				let data = operation.data || {};
+
+				if (options.timestamps) {
+					data = { ...data, ...this.getTimestampData() };
+				}
+
+				if (options.validate && operation.data) {
+					const validation = this.validateData(operation.data, options.validator);
+					if (!validation.valid) {
+						throw new MutationError(
+							MutationErrorCode.VALIDATION_FAILED,
+							validation.message || 'Validation failed',
+							operation.type,
+							operation.path
+						);
+					}
+				}
+
+				// For CREATE operations, use addDoc if no custom ID, otherwise use setDoc
+				if (options.customId) {
+					// Use setDoc with custom ID
+					const docRef = doc(firestore, operation.path, options.customId);
+					batch.set(docRef, { ...data, id: options.customId }, { merge: options.merge });
+				} else {
+					// Use addDoc to let Firestore generate the ID
+					// Note: We can't use addDoc in a batch, so we need to generate an ID
+					const docId = this.generateDocumentId();
+					const docRef = doc(firestore, operation.path, docId);
+					batch.set(docRef, { ...data, id: docId }, { merge: options.merge });
+				}
+				break;
+			}
+
 			case 'set': {
 				const docRef = doc(firestore, operation.path);
 				let data = operation.data || {};
@@ -1092,6 +1013,19 @@ class FirekitDocumentMutations {
 					`Operation type ${operation.type} not supported in batch`
 				);
 		}
+	}
+
+	/**
+	 * Generate a unique document ID (Firestore-style)
+	 */
+	private generateDocumentId(): string {
+		// Generate a Firestore-style document ID (20 characters, alphanumeric)
+		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		let result = '';
+		for (let i = 0; i < 20; i++) {
+			result += chars.charAt(Math.floor(Math.random() * chars.length));
+		}
+		return result;
 	}
 
 	/**
@@ -1253,38 +1187,6 @@ class FirekitDocumentMutations {
 			this.analytics.totalMutations;
 	}
 
-	// ========================================
-	// EVENT MANAGEMENT
-	// ========================================
-
-	/**
-	 * Add event listener for mutation events
-	 *
-	 * @param callback Event callback function
-	 * @returns Cleanup function to remove listener
-	 *
-	 * @example
-	 * ```typescript
-	 * const unsubscribe = firekitDocMutations.addEventListener((event) => {
-	 *   console.log('Mutation event:', event.type, event.data);
-	 * });
-	 *
-	 * // Clean up when done
-	 * unsubscribe();
-	 * ```
-	 */
-	addEventListener(callback: MutationEventCallback): () => void {
-		this.eventListeners.add(callback);
-		return () => this.eventListeners.delete(callback);
-	}
-
-	/**
-	 * Remove all event listeners
-	 */
-	clearEventListeners(): void {
-		this.eventListeners.clear();
-	}
-
 	/**
 	 * Get current mutation analytics
 	 *
@@ -1359,11 +1261,6 @@ class FirekitDocumentMutations {
  *   { type: 'create', path: 'users', data: userData },
  *   { type: 'update', path: 'profiles/123', data: updateData }
  * ]);
- *
- * // Listen to events
- * const unsubscribe = firekitDocMutations.addEventListener((event) => {
- *   console.log('Mutation:', event.type, event.data);
- * });
  * ```
  */
 export const firekitDocMutations = new FirekitDocumentMutations();

@@ -11,6 +11,7 @@ import { getAuth } from 'firebase/auth';
 import { getFunctions } from 'firebase/functions';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
+import { getAnalytics } from 'firebase/analytics';
 import { firebaseConfig } from './config.js';
 import {
 	FirebaseServiceStatus,
@@ -37,6 +38,7 @@ class FirebaseService implements FirebaseServiceInstance {
 	functions: FirebaseServiceInstance['functions'] = null;
 	database: FirebaseServiceInstance['database'] = null;
 	storage: FirebaseServiceInstance['storage'] = null;
+	analytics: FirebaseServiceInstance['analytics'] = null;
 	status: FirebaseServiceStatus = FirebaseServiceStatus.UNINITIALIZED;
 	initializationError: Error | null = null;
 	readonly isBrowser = typeof window !== 'undefined';
@@ -240,6 +242,31 @@ class FirebaseService implements FirebaseServiceInstance {
 	}
 
 	/**
+	 * Gets the Analytics instance, initializing it if necessary.
+	 * Only available in browser environment.
+	 *
+	 * @returns {Analytics} The Analytics instance
+	 * @throws {FirebaseServiceError} If Analytics initialization fails
+	 */
+	getAnalyticsInstance(): FirebaseServiceInstance['analytics'] {
+		if (!this.isBrowser) {
+			throw new FirebaseServiceError(
+				'Analytics is not available in server environment',
+				'analytics'
+			);
+		}
+
+		try {
+			if (!this.analytics) {
+				this.analytics = getAnalytics(this.getFirebaseApp()!);
+			}
+			return this.analytics;
+		} catch (error) {
+			throw new FirebaseServiceError('Failed to initialize Analytics', 'analytics');
+		}
+	}
+
+	/**
 	 * Resets the Firebase service to its initial state.
 	 * Useful for testing or when you need to reinitialize the services.
 	 *
@@ -252,6 +279,7 @@ class FirebaseService implements FirebaseServiceInstance {
 		this.functions = null;
 		this.database = null;
 		this.storage = null;
+		this.analytics = null;
 		this.status = FirebaseServiceStatus.UNINITIALIZED;
 		this.initializationError = null;
 	}

@@ -467,40 +467,6 @@ export class MutationError extends Error {
 /**
  * Mutation event types for tracking operations
  */
-export type MutationEventType =
-	| 'mutation_start'
-	| 'mutation_success'
-	| 'mutation_error'
-	| 'mutation_retry'
-	| 'batch_start'
-	| 'batch_progress'
-	| 'batch_complete'
-	| 'validation_failed'
-	| 'optimistic_update'
-	| 'rollback';
-
-/**
- * Mutation event interface
- */
-export interface MutationEvent {
-	/** Event type */
-	type: MutationEventType;
-	/** Event data */
-	data?: any;
-	/** Error if applicable */
-	error?: MutationError;
-	/** Event timestamp */
-	timestamp: Date;
-	/** Operation ID for tracking */
-	operationId?: string;
-	/** User who triggered the event */
-	userId?: string;
-}
-
-/**
- * Mutation event callback function type
- */
-export type MutationEventCallback = (event: MutationEvent) => void;
 
 /**
  * Mutation analytics data

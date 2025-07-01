@@ -3,7 +3,6 @@
 	import { firebaseService } from '../firebase.js';
 	import { doc } from 'firebase/firestore';
 	import { browser } from '$app/environment';
-	import { onDestroy } from 'svelte';
 	import type { DocumentReference, DocumentData, Firestore } from 'firebase/firestore';
 	import type { Snippet } from 'svelte';
 	import type { DocumentOptions } from '../types/document.js';
@@ -41,101 +40,76 @@
 	} = $props();
 
 	// Get Firestore instance only in browser environment
-	let firestore: Firestore | null = $state(null);
-	let docRef: DocumentReference | null = $state(null);
-	let documentService: any = $state(null);
+	let firestore = $derived(browser ? firebaseService.getDbInstance() : null);
 
-	// Reactive document state
-	let componentState = $state({
-		loading: true,
-		data: null as DocumentData | null,
-		error: null as Error | null,
-		exists: false
+	// Create document reference if path string is provided
+	let docRef = $derived(
+		firestore && typeof ref === 'string' ? doc(firestore, ref) : (ref as DocumentReference)
+	);
+
+	// Create document service with derived path
+	let documentPath = $derived(typeof ref === 'string' ? ref : (ref as DocumentReference).path);
+	let documentService = $state<ReturnType<typeof firekitDoc> | null>(null);
+
+	// Track document state using derived computations
+	let documentState = $derived({
+		loading: !browser
+			? false
+			: !firestore
+				? false
+				: !documentService
+					? true
+					: documentService.loading,
+		data: !browser
+			? (startWith ?? null)
+			: !firestore
+				? null
+				: !documentService
+					? (startWith ?? null)
+					: documentService.data,
+		error: !browser
+			? null
+			: !firestore
+				? new Error('Firestore instance not available')
+				: !documentService
+					? null
+					: documentService.error,
+		canRefresh: !browser
+			? false
+			: !firestore
+				? false
+				: !documentService
+					? false
+					: documentService.canRefresh
 	});
 
-	// Initialize document service and set up state management
+	// Set up document service and event listener
 	$effect(() => {
-		if (!browser) {
-			componentState = {
-				loading: false,
-				data: startWith ?? null,
-				error: null,
-				exists: !!startWith
-			};
+		if (!browser || !documentPath) {
+			documentService = null;
 			return;
 		}
 
-		firestore = firebaseService.getDbInstance();
-		if (!firestore) {
-			componentState = {
-				loading: false,
-				data: null,
-				error: new Error('Firestore instance not available'),
-				exists: false
-			};
-			return;
-		}
-
-		// Create document reference if path string is provided
-		docRef = typeof ref === 'string' ? doc(firestore, ref) : ref;
-
-		// Create document service
-		documentService = firekitDoc(docRef.path, startWith ?? undefined, options);
-
-		// Set initial state from service
-		componentState = {
-			loading: documentService.loading,
-			data: documentService.data,
-			error: documentService.error,
-			exists: documentService.exists
-		};
-
-		// Set up reactive state updates
-		const unsubscribe = documentService.addEventListener?.((event: any) => {
-			if (event.type === 'data_changed') {
-				componentState = {
-					loading: false,
-					data: event.data,
-					error: null,
-					exists: event.exists
-				};
-			} else if (event.type === 'error') {
-				componentState = {
-					loading: false,
-					data: null,
-					error: event.error,
-					exists: false
-				};
-			} else if (event.type === 'loading_started') {
-				componentState = {
-					...componentState,
-					loading: true
-				};
-			} else if (event.type === 'loading_finished') {
-				componentState = {
-					...componentState,
-					loading: false
-				};
-			}
-		});
+		// Create new service when path or options change
+		const newService = firekitDoc(documentPath, startWith ?? undefined, options);
+		documentService = newService;
 
 		return () => {
-			unsubscribe?.();
-			documentService?.dispose();
+			newService?.dispose();
 		};
-	});
-
-	// Cleanup on component destruction
-	onDestroy(() => {
-		if (documentService) {
-			documentService.dispose();
-		}
 	});
 </script>
 
 {#if !browser}
 	{@render children(startWith ?? null, null as any, null as any)}
-{:else if componentState.loading}
+{:else if !firestore}
+	<div class="flex items-center justify-center min-h-screen">
+		<div class="text-center">
+			<div class="text-red-500 text-lg font-semibold mb-2">Firestore Not Available</div>
+			<p class="text-gray-600">Firestore instance is not available.</p>
+		</div>
+	</div>
+{:else if documentState.loading}
 	{#if loading}
 		{@render loading()}
 	{:else}
@@ -146,12 +120,12 @@
 			</div>
 		</div>
 	{/if}
-{:else if componentState.error}
+{:else if documentState.error}
 	<div class="flex items-center justify-center min-h-screen">
 		<div class="text-center">
 			<div class="text-red-500 text-lg font-semibold mb-2">Error Loading Document</div>
-			<p class="text-gray-600 mb-4">{componentState.error.message}</p>
-			{#if documentService?.canRefresh}
+			<p class="text-gray-600 mb-4">{documentState.error.message}</p>
+			{#if documentState.canRefresh}
 				<button
 					class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
 					onclick={() => documentService?.refresh()}
@@ -162,5 +136,5 @@
 		</div>
 	</div>
 {:else}
-	{@render children(componentState.data ?? null, docRef!, firestore!)}
+	{@render children(documentState.data, docRef!, firestore!)}
 {/if}
