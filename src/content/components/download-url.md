@@ -57,7 +57,7 @@ Display user avatars with fallback handling:
 		<div class="avatar-skeleton"></div>
 	{/snippet}
 
-	{#snippet default(url, ref, storage)}
+	{#snippet children(url, ref, storage)}
 		<img src={url} alt="User avatar" class="user-avatar" />
 	{/snippet}
 </DownloadURL>
@@ -102,7 +102,7 @@ The `children` slot receives three parameters:
 </script>
 
 <DownloadURL ref="images/photo.jpg" let:url let:ref let:storage>
-	{#snippet default(url: string, ref: StorageReference, storage: any)}
+	{#snippet children(url: string, ref: StorageReference, storage: any)}
 		<div class="image-container">
 			<img src={url} alt="Photo" />
 			<div class="image-info">
@@ -494,7 +494,7 @@ If the DownloadURL component doesn't load:
 </script>
 
 <DownloadURL ref="images/test.jpg" let:url let:ref let:storage let:loading let:error>
-	{#snippet default(url, ref, storage)}
+	{#snippet children(url, ref, storage)}
 		<div class="debug">
 			<p>URL: {url}</p>
 			<p>Ref path: {ref?.fullPath}</p>

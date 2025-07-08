@@ -74,7 +74,7 @@ Show custom loading content while fetching data:
 		</div>
 	{/snippet}
 
-	{#snippet default(data, ref, firestore)}
+	{#snippet children(data, ref, firestore)}
 		{#if data}
 			<div class="user-profile">
 				<img src={data.photoURL} alt={data.displayName} />
@@ -131,7 +131,7 @@ The `children` slot receives three parameters:
 </script>
 
 <Doc ref="users/123" let:data let:ref let:firestore>
-	{#snippet default(data: DocumentData | null, ref: DocumentReference, firestore: Firestore)}
+	{#snippet children(data: DocumentData | null, ref: DocumentReference, firestore: Firestore)}
 		{#if data}
 			<div class="user-info">
 				<h1>{data.name}</h1>
@@ -413,7 +413,7 @@ If the component doesn't render:
 </script>
 
 <Doc ref={docPath} let:data let:ref let:firestore>
-	{#snippet default(data, ref, firestore)}
+	{#snippet children(data, ref, firestore)}
 		<div class="debug">
 			<p>Path: {docPath}</p>
 			<p>Data: {JSON.stringify(data)}</p>

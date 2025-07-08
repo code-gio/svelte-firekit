@@ -173,7 +173,7 @@ Slot-based rendering allows complete control over UI presentation.
 		</div>
 	{/snippet}
 
-	{#snippet default(data, ref, firestore, count)}
+	{#snippet children(data, ref, firestore, count)}
 		<h1>Posts ({count})</h1>
 		{#each data as post}
 			<PostCard {post} />

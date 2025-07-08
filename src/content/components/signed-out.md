@@ -153,7 +153,7 @@ The `children` slot receives one parameter:
 </script>
 
 <SignedOut let:auth>
-	{#snippet default(auth: Auth)}
+	{#snippet children(auth: Auth)}
 		<div class="auth-container">
 			{#if !showEmailForm}
 				<div class="social-signin">
@@ -600,7 +600,7 @@ If the SignedOut component doesn't render:
 </script>
 
 <SignedOut let:auth>
-	{#snippet default(auth)}
+	{#snippet children(auth)}
 		<div class="debug">
 			<p>Auth instance: {auth ? 'Available' : 'Not available'}</p>
 			<p>Auth app: {auth?.app?.name}</p>

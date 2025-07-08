@@ -115,7 +115,7 @@ Show custom loading content while fetching data:
 		</div>
 	{/snippet}
 
-	{#snippet default(data, ref, firestore, count)}
+	{#snippet children(data, ref, firestore, count)}
 		<h1>Posts ({count})</h1>
 		{#each data as post}
 			<article>
@@ -147,7 +147,7 @@ The `children` slot receives four parameters:
 </script>
 
 <Collection ref="posts" let:data let:ref let:firestore let:count>
-	{#snippet default(data: DocumentData[], ref: CollectionReference | Query, firestore: Firestore, count: number)}
+	{#snippet children(data: DocumentData[], ref: CollectionReference | Query, firestore: Firestore, count: number)}
 		<div class="collection-info">
 			<h1>Posts Collection</h1>
 			<p>Total documents: {count}</p>
@@ -540,7 +540,7 @@ If the component doesn't render:
 </script>
 
 <Collection ref={collectionPath} let:data let:ref let:firestore let:count>
-	{#snippet default(data, ref, firestore, count)}
+	{#snippet children(data, ref, firestore, count)}
 		<div class="debug">
 			<p>Path: {collectionPath}</p>
 			<p>Data length: {data.length}</p>

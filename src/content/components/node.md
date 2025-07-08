@@ -152,7 +152,7 @@ The `children` slot receives three parameters:
 </script>
 
 <Node path="users/{userId}" let:data let:ref let:database>
-	{#snippet default(data: any, ref: DatabaseReference, database: Database)}
+	{#snippet children(data: any, ref: DatabaseReference, database: Database)}
 		<div class="user-details">
 			<h1>User Profile</h1>
 			<p><strong>Database Path:</strong> {ref.toString()}</p>
@@ -583,7 +583,7 @@ If the Node component doesn't load:
 </script>
 
 <Node path={nodePath} let:data let:ref let:database>
-	{#snippet default(data, ref, database)}
+	{#snippet children(data, ref, database)}
 		<div class="debug">
 			<p>Database: {database ? 'Available' : 'Not available'}</p>
 			<p>Path: {nodePath}</p>
@@ -610,7 +610,7 @@ If data doesn't update in real-time:
 </script>
 
 <Node path={nodePath} let:data let:ref let:database>
-	{#snippet default(data, ref, database)}
+	{#snippet children(data, ref, database)}
 		<div class="debug-updates">
 			<p>Current path: {nodePath}</p>
 			<p>Data timestamp: {new Date().toISOString()}</p>

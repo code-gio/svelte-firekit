@@ -214,7 +214,7 @@ The `children` slot receives four parameters:
 </script>
 
 <UploadTask ref="uploads/{selectedFile?.name}" data={selectedFile} let:snapshot let:task let:progress let:storage>
-	{#snippet default(snapshot: UploadTaskSnapshot | null, task: any, progress: number, storage: any)}
+	{#snippet children(snapshot: UploadTaskSnapshot | null, task: any, progress: number, storage: any)}
 		<div class="upload-details">
 			<div class="progress-info">
 				<p>Progress: {progress}%</p>
@@ -714,8 +714,15 @@ If uploads don't start:
 	});
 </script>
 
-<UploadTask ref="uploads/{selectedFile?.name}" data={selectedFile} let:snapshot let:task let:progress let:storage>
-	{#snippet default(snapshot, task, progress, storage)}
+<UploadTask
+	ref="uploads/{selectedFile?.name}"
+	data={selectedFile}
+	let:snapshot
+	let:task
+	let:progress
+	let:storage
+>
+	{#snippet children(snapshot, task, progress, storage)}
 		<div class="debug">
 			<p>Storage: {storage ? 'Available' : 'Not available'}</p>
 			<p>File: {selectedFile?.name}</p>
@@ -742,8 +749,15 @@ If progress doesn't update:
 	});
 </script>
 
-<UploadTask ref="uploads/{selectedFile?.name}" data={selectedFile} let:snapshot let:task let:progress let:storage>
-	{#snippet default(snapshot, task, progress, storage)}
+<UploadTask
+	ref="uploads/{selectedFile?.name}"
+	data={selectedFile}
+	let:snapshot
+	let:task
+	let:progress
+	let:storage
+>
+	{#snippet children(snapshot, task, progress, storage)}
 		<div class="debug-progress">
 			<p>Progress: {progress}%</p>
 			<p>Snapshot state: {snapshot?.state}</p>

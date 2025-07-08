@@ -155,7 +155,7 @@ The `children` slot receives three parameters:
 </script>
 
 <NodeList path="posts" let:data let:ref let:database>
-	{#snippet default(data: any[], ref: DatabaseReference, database: Database)}
+	{#snippet children(data: any[], ref: DatabaseReference, database: Database)}
 		<div class="posts-container">
 			<div class="posts-header">
 				<h1>Posts ({data.length})</h1>
@@ -603,7 +603,7 @@ If the NodeList component doesn't load:
 </script>
 
 <NodeList path={listPath} let:data let:ref let:database>
-	{#snippet default(data, ref, database)}
+	{#snippet children(data, ref, database)}
 		<div class="debug">
 			<p>Database: {database ? 'Available' : 'Not available'}</p>
 			<p>Path: {listPath}</p>
@@ -632,7 +632,7 @@ If the list doesn't update in real-time:
 </script>
 
 <NodeList path={listPath} let:data let:ref let:database>
-	{#snippet default(data, ref, database)}
+	{#snippet children(data, ref, database)}
 		<div class="debug-updates">
 			<p>Current path: {listPath}</p>
 			<p>Update timestamp: {new Date().toISOString()}</p>

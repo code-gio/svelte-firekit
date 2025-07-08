@@ -119,7 +119,7 @@ The `children` slot receives one parameter:
 </script>
 
 <SignedIn let:user>
-	{#snippet default(user: UserProfile)}
+	{#snippet children(user: UserProfile)}
 		<div class="user-welcome">
 			<h1>Hello, {user.displayName || user.email}!</h1>
 			{#if user.photoURL}
@@ -450,7 +450,7 @@ If the SignedIn component doesn't render:
 </script>
 
 <SignedIn let:user>
-	{#snippet default(user)}
+	{#snippet children(user)}
 		<div class="debug">
 			<p>User ID: {user.uid}</p>
 			<p>Email: {user.email}</p>

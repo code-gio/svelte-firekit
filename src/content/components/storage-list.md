@@ -196,7 +196,7 @@ The `children` slot receives four parameters:
 </script>
 
 <StorageList path="uploads/" let:items let:prefixes let:loading let:error>
-	{#snippet default(items: StorageReference[], prefixes: StorageReference[], loading: boolean, error: Error | null)}
+	{#snippet children(items: StorageReference[], prefixes: StorageReference[], loading: boolean, error: Error | null)}
 		{#if loading}
 			<div class="loading">Loading storage contents...</div>
 		{:else if error}
@@ -560,7 +560,7 @@ If the component doesn't update when files change:
 </script>
 
 <StorageList path={storagePath} let:items let:prefixes let:loading let:error>
-	{#snippet default(items, prefixes, loading, error)}
+	{#snippet children(items, prefixes, loading, error)}
 		<div class="debug">
 			<p>Path: {storagePath}</p>
 			<p>Loading: {loading}</p>
