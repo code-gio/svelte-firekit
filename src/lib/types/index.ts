@@ -18,9 +18,6 @@ export type {
 	FirestoreOperator,
 	CollectionChangeType,
 	DocumentChange,
-	CollectionEventType,
-	CollectionEvent,
-	CollectionEventCallback,
 	CollectionMetadata,
 	CollectionStats,
 	CollectionErrorCode,
@@ -76,9 +73,6 @@ export type {
 	OptimisticUpdateConfig,
 	MutationErrorCode,
 	MutationError,
-	MutationEventType,
-	MutationEvent,
-	MutationEventCallback,
 	MutationAnalytics
 } from './mutations.js';
 
@@ -91,9 +85,6 @@ export type {
 	SessionData,
 	UserPresence,
 	PresenceStats,
-	PresenceEventType,
-	PresenceEvent,
-	PresenceEventCallback,
 	GeolocationProvider,
 	SessionStorage,
 	PresenceService,

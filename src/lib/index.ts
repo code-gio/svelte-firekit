@@ -37,15 +37,15 @@ export {
 } from './services/storage.svelte.js';
 
 // Components
-export { default as FirebaseApp } from './components/firebase-app.svelte';
-export { default as AuthGuard } from './components/auth-guard.svelte';
-export { default as CustomGuard } from './components/custom-guard.svelte';
-export { default as SignedIn } from './components/signed-in.svelte';
-export { default as SignedOut } from './components/signed-out.svelte';
-export { default as Doc } from './components/Doc.svelte';
-export { default as Collection } from './components/Collection.svelte';
-export { default as Node } from './components/Node.svelte';
-export { default as NodeList } from './components/node-list.svelte';
-export { default as StorageList } from './components/storage-list.svelte';
-export { default as DownloadURL } from './components/download-url.svelte';
-export { default as UploadTask } from './components/upload-task.svelte';
+export { default as FirebaseApp } from './components/firekit/firebase-app.svelte';
+export { default as AuthGuard } from './components/firekit/auth-guard.svelte';
+export { default as CustomGuard } from './components/firekit/custom-guard.svelte';
+export { default as SignedIn } from './components/firekit/signed-in.svelte';
+export { default as SignedOut } from './components/firekit/signed-out.svelte';
+export { default as Doc } from './components/firekit/Doc.svelte';
+export { default as Collection } from './components/firekit/Collection.svelte';
+export { default as Node } from './components/firekit/Node.svelte';
+export { default as NodeList } from './components/firekit/node-list.svelte';
+export { default as StorageList } from './components/firekit/storage-list.svelte';
+export { default as DownloadURL } from './components/firekit/download-url.svelte';
+export { default as UploadTask } from './components/firekit/upload-task.svelte';

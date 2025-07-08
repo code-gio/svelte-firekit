@@ -1,6 +1,6 @@
 {
 	"name": "svelte-firekit",
-	"version": "0.1.6",
+	"version": "0.1.7",
 	"license": "MIT",
 	"scripts": {
 		"dev": "vite dev",
@@ -47,19 +47,47 @@
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@dnd-kit-svelte/core": "^0.0.8",
+		"@dnd-kit-svelte/modifiers": "^0.0.8",
+		"@dnd-kit-svelte/sortable": "^0.0.8",
+		"@dnd-kit-svelte/utilities": "^0.0.8",
+		"@internationalized/date": "^3.8.2",
+		"@lucide/svelte": "^0.515.0",
 		"@sveltejs/adapter-auto": "^6.0.0",
 		"@sveltejs/kit": "^2.16.0",
 		"@sveltejs/package": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
+		"@tabler/icons-svelte": "^3.34.0",
+		"@tailwindcss/typography": "^0.5.15",
+		"@tailwindcss/vite": "^4.0.0",
+		"@tanstack/table-core": "^8.21.3",
+		"@types/d3-scale": "^4.0.9",
+		"@types/d3-shape": "^3.1.7",
+		"bits-ui": "^2.8.10",
+		"clsx": "^2.1.1",
+		"d3-scale": "^4.0.2",
+		"d3-shape": "^3.2.0",
+		"layerchart": "^2.0.0-next.27",
+		"mdsvex": "^0.12.6",
 		"prettier": "^3.4.2",
 		"prettier-plugin-svelte": "^3.3.3",
+		"prettier-plugin-tailwindcss": "^0.6.11",
 		"publint": "^0.3.2",
+		"shiki": "^3.7.0",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",
+		"svelte-sonner": "^1.0.5",
+		"tailwind-merge": "^3.3.1",
+		"tailwind-variants": "^1.0.0",
+		"tailwindcss": "^4.0.0",
+		"tw-animate-css": "^1.3.4",
 		"typescript": "^5.0.0",
-		"vite": "^6.2.6"
+		"vaul-svelte": "^1.0.0-next.7",
+		"vite": "^6.2.6",
+		"zod": "^3.25.67"
 	},
 	"dependencies": {
-		"firebase": "^11.9.1"
+		"firebase": "^11.9.1",
+		"mode-watcher": "^1.1.0"
 	}
 }
