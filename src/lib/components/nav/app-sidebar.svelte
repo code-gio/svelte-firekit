@@ -91,57 +91,57 @@
 		components: [
 			{
 				name: 'Collection',
-				url: '/components/collection',
+				url: '/docs/components/collection',
 				icon: IconDatabase
 			},
 			{
 				name: 'Document',
-				url: '/components/document',
+				url: '/docs/components/doc',
 				icon: IconFileText
 			},
 			{
 				name: 'Node',
-				url: '/components/node',
+				url: '/docs/components/node',
 				icon: IconDatabase
 			},
 			{
 				name: 'Upload Task',
-				url: '/components/upload-task',
+				url: '/docs/components/upload-task',
 				icon: IconUpload
 			},
 			{
 				name: 'Storage List',
-				url: '/components/storage-list',
+				url: '/docs/components/storage-list',
 				icon: IconList
 			},
 			{
 				name: 'Download URL',
-				url: '/components/download-url',
+				url: '/docs/components/download-url',
 				icon: IconDownload
 			},
 			{
 				name: 'Auth Guard',
-				url: '/components/auth-guard',
+				url: '/docs/components/auth-guard',
 				icon: IconLock
 			},
 			{
 				name: 'Custom Guard',
-				url: '/components/custom-guard',
+				url: '/docs/components/custom-guard',
 				icon: IconLockAccess
 			},
 			{
 				name: 'Signed In',
-				url: '/components/signed-in',
+				url: '/docs/components/signed-in',
 				icon: IconLogin
 			},
 			{
 				name: 'Signed Out',
-				url: '/components/signed-out',
+				url: '/docs/components/signed-out',
 				icon: IconLogout
 			},
 			{
 				name: 'Firebase App',
-				url: '/components/firebase-app',
+				url: '/docs/components/firebase-app',
 				icon: IconAppWindow
 			}
 		]
