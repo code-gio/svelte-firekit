@@ -1,0 +1,165 @@
+# Svelte Firekit - AI Agent Context
+
+## Project Overview
+Svelte Firekit is a comprehensive Firebase integration library for Svelte applications. It provides real-time Firestore subscriptions, authentication, storage, and analytics components with a clean, reactive API.
+
+## Project Structure
+```
+svelte-firekit/
+├── src/
+│   ├── lib/
+│   │   ├── components/
+│   │   │   ├── firekit/          # Core Firebase components
+│   │   │   ├── ui/               # Reusable UI components
+│   │   │   ├── nav/              # Navigation components
+│   │   │   └── docs/             # Documentation components
+│   │   ├── services/             # Firebase service integrations
+│   │   ├── types/                # TypeScript type definitions
+│   │   └── utils/                # Utility functions
+│   ├── content/                  # Documentation content
+│   └── routes/                   # SvelteKit routes
+```
+
+## Key Technologies
+- **Svelte 5**: Modern reactive framework with runes
+- **SvelteKit**: Full-stack web framework
+- **Firebase**: Backend-as-a-Service (Firestore, Auth, Storage, Analytics)
+- **TypeScript**: Type-safe development
+- **Tailwind CSS**: Utility-first CSS framework
+
+## Core Components
+
+### Firebase Components (`src/lib/components/firekit/`)
+- `Collection.svelte`: Real-time Firestore collection subscriptions
+- `Doc.svelte`: Real-time Firestore document subscriptions
+- `AuthGuard.svelte`: Route protection with authentication
+- `SignedIn.svelte` / `SignedOut.svelte`: Conditional rendering based on auth state
+- `StorageList.svelte`: Firebase Storage file listing
+- `UploadTask.svelte`: File upload with progress tracking
+- `DownloadUrl.svelte`: Secure file download URLs
+- `Node.svelte` / `NodeList.svelte`: Generic data node components
+
+### Services (`src/lib/services/`)
+- `auth.ts`: Authentication state management
+- `collection.svelte.ts`: Collection subscription logic
+- `document.svelte.ts`: Document subscription logic
+- `storage.svelte.ts`: Storage operations
+- `analytics.ts`: Analytics tracking
+- `realtime.svelte.ts`: Real-time data synchronization
+- `presence.svelte.ts`: User presence tracking
+- `mutations.ts`: Data mutation operations
+
+## Development Guidelines
+
+### Code Style
+- Use TypeScript for type safety
+- Follow Svelte 5 conventions with runes ($state, $derived, $effect)
+- Use semantic HTML and accessible components
+- Implement proper error handling and loading states
+- Write self-documenting code with meaningful names
+
+### Component Patterns
+- Use slot-based APIs for flexible rendering
+- Provide reactive state management
+- Handle loading, error, and empty states
+- Support query constraints and filtering
+- Implement proper cleanup and subscription management
+
+### Firebase Integration
+- Use Firebase v9+ modular API
+- Implement proper security rules
+- Handle authentication state changes
+- Support real-time subscriptions
+- Provide offline capabilities
+
+## Key Features
+
+### Real-time Data
+- Automatic Firestore subscriptions
+- Reactive data updates
+- Optimistic UI updates
+- Conflict resolution
+
+### Authentication
+- User state management
+- Route protection
+- Role-based access control
+- Social authentication support
+
+### Storage
+- File upload with progress
+- Secure download URLs
+- File metadata management
+- Storage rules integration
+
+### Analytics
+- Automatic event tracking
+- Custom event support
+- User property tracking
+- Conversion tracking
+
+## Documentation Structure
+The project includes comprehensive documentation in `src/content/`:
+- Installation and setup guides
+- Component API references
+- Usage examples and patterns
+- Best practices and troubleshooting
+
+## Development Workflow
+1. Use TypeScript for all new code
+2. Write tests for critical functionality
+3. Update documentation for new features
+4. Follow semantic versioning
+5. Maintain backward compatibility
+
+## Common Patterns
+
+### Collection Subscription
+```svelte
+<Collection ref="posts" let:data let:count>
+  <h1>Posts ({count})</h1>
+  {#each data as post}
+    <article>{post.title}</article>
+  {/each}
+</Collection>
+```
+
+### Authentication Guard
+```svelte
+<AuthGuard let:user>
+  <h1>Welcome {user.displayName}</h1>
+  <SignedOut>
+    <p>Please sign in to continue</p>
+  </SignedOut>
+</AuthGuard>
+```
+
+### File Upload
+```svelte
+<UploadTask ref="uploads/photo.jpg" let:task let:url>
+  <input type="file" onchange={task.upload} />
+  {#if url}
+    <img src={url} alt="Uploaded photo" />
+  {/if}
+</UploadTask>
+```
+
+## Error Handling
+- Graceful degradation for network issues
+- User-friendly error messages
+- Retry mechanisms for failed operations
+- Proper error boundaries
+
+## Performance Considerations
+- Lazy loading of components
+- Efficient subscription management
+- Optimized re-renders
+- Bundle size optimization
+
+## Security
+- Client-side validation
+- Server-side security rules
+- Secure authentication flows
+- Data sanitization
+
+This project aims to provide a seamless Firebase integration experience for Svelte developers while maintaining high performance, security, and developer experience standards. 

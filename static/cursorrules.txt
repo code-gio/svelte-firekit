@@ -1,0 +1,475 @@
+# Svelte Firekit - Cursor Rules
+
+## Project Overview
+Svelte Firekit is a comprehensive Firebase integration library for Svelte applications. It provides real-time Firestore subscriptions, authentication, storage, and analytics components with a clean, reactive API using Svelte 5 runes.
+
+## Core Technologies
+- Svelte 5 (with runes: $state, $derived, $effect)
+- SvelteKit
+- Firebase v9+ (Firestore, Auth, Storage, Analytics)
+- TypeScript
+- Tailwind CSS
+
+## File Structure Conventions
+
+### Component Organization
+- Firebase components: `src/lib/components/firekit/`
+- UI components: `src/lib/components/ui/`
+- Navigation: `src/lib/components/nav/`
+- Documentation: `src/lib/components/docs/`
+- Services: `src/lib/services/`
+- Types: `src/lib/types/`
+- Utils: `src/lib/utils/`
+
+### Naming Conventions
+- Components: PascalCase (e.g., `Collection.svelte`, `AuthGuard.svelte`)
+- Services: camelCase (e.g., `auth.ts`, `collection.svelte.ts`)
+- Types: PascalCase with descriptive names (e.g., `CollectionProps`, `AuthState`)
+- Utils: camelCase (e.g., `firestore.ts`, `errors.ts`)
+
+## Svelte 5 Runes Usage
+
+### State Management
+```svelte
+<script>
+  // Use $state for reactive variables
+  let count = $state(0);
+  let user = $state(null);
+  
+  // Use $derived for computed values
+  let isAuthenticated = $derived(user !== null);
+  let displayName = $derived(user?.displayName || 'Anonymous');
+  
+  // Use $effect for side effects
+  $effect(() => {
+    if (isAuthenticated) {
+      console.log('User authenticated:', user);
+    }
+  });
+</script>
+```
+
+### Component Props Interface
+Always define TypeScript interfaces for component props:
+```typescript
+interface ComponentProps {
+  ref: string | CollectionReference | Query;
+  startWith?: DocumentData[];
+  queryConstraints?: QueryConstraint[];
+  // ... other props
+}
+```
+
+## Firebase Integration Patterns
+
+### Collection Components
+```svelte
+<script>
+  import { Collection } from 'svelte-firekit';
+  import { where, orderBy, limit } from 'firebase/firestore';
+  
+  const queryConstraints = [
+    where('published', '==', true),
+    orderBy('createdAt', 'desc'),
+    limit(10)
+  ];
+</script>
+
+<Collection ref="posts" {queryConstraints} let:data let:ref let:firestore let:count>
+  <h1>Posts ({count})</h1>
+  {#each data as post}
+    <article>
+      <h2>{post.title}</h2>
+      <p>{post.content}</p>
+    </article>
+  {/each}
+</Collection>
+```
+
+### Document Components
+```svelte
+<script>
+  import { Doc } from 'svelte-firekit';
+</script>
+
+<Doc ref="posts/{postId}" let:data let:ref let:firestore>
+  {#if data}
+    <article>
+      <h1>{data.title}</h1>
+      <p>{data.content}</p>
+    </article>
+  {/if}
+</Doc>
+```
+
+### Authentication Components
+```svelte
+<script>
+  import { AuthGuard, SignedIn, SignedOut } from 'svelte-firekit';
+</script>
+
+<AuthGuard let:user>
+  <SignedIn>
+    <h1>Welcome {user.displayName}</h1>
+    <!-- Protected content -->
+  </SignedIn>
+  
+  <SignedOut>
+    <p>Please sign in to continue</p>
+    <!-- Sign in form -->
+  </SignedOut>
+</AuthGuard>
+```
+
+## Component Development Guidelines
+
+### Slot-Based APIs
+Always use slot-based APIs for flexible rendering:
+```svelte
+<script>
+  import { createEventDispatcher } from 'svelte';
+  
+  const dispatch = createEventDispatcher();
+  
+  interface Props {
+    ref: string | CollectionReference | Query;
+    startWith?: DocumentData[];
+  }
+  
+  let { ref, startWith = [] }: Props = $props();
+</script>
+
+<div class="component-wrapper">
+  {#snippet children(data, ref, firestore, count)}
+    <slot {data} {ref} {firestore} {count} />
+  {/snippet}
+  
+  {#snippet loading()}
+    <slot name="loading">
+      <div class="loading">Loading...</div>
+    </slot>
+  {/snippet}
+</div>
+```
+
+### Error Handling
+Implement comprehensive error handling:
+```svelte
+<script>
+  let error = $state(null);
+  let loading = $state(true);
+  
+  $effect(() => {
+    try {
+      // Firebase operation
+    } catch (err) {
+      error = err;
+    } finally {
+      loading = false;
+    }
+  });
+</script>
+
+{#if error}
+  <div class="error">
+    <h3>Error</h3>
+    <p>{error.message}</p>
+  </div>
+{:else if loading}
+  <div class="loading">Loading...</div>
+{:else}
+  <!-- Content -->
+{/if}
+```
+
+### Loading States
+Provide meaningful loading states:
+```svelte
+{#snippet loading()}
+  <div class="loading-skeleton">
+    {#each Array(3) as _}
+      <div class="skeleton-item">
+        <div class="skeleton-title"></div>
+        <div class="skeleton-content"></div>
+      </div>
+    {/each}
+  </div>
+{/snippet}
+```
+
+## Service Layer Patterns
+
+### Service Structure
+```typescript
+// src/lib/services/example.svelte.ts
+import { writable } from 'svelte/store';
+import type { DocumentData, CollectionReference } from 'firebase/firestore';
+
+interface ServiceState {
+  data: DocumentData[];
+  loading: boolean;
+  error: Error | null;
+}
+
+function createService() {
+  const { subscribe, set, update } = writable<ServiceState>({
+    data: [],
+    loading: false,
+    error: null
+  });
+
+  return {
+    subscribe,
+    load: async (ref: CollectionReference) => {
+      // Implementation
+    },
+    reset: () => set({ data: [], loading: false, error: null })
+  };
+}
+
+export const exampleService = createService();
+```
+
+### Firebase Service Integration
+```typescript
+import { collection, query, onSnapshot, where, orderBy } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
+
+export function createCollectionSubscription(
+  path: string,
+  constraints: QueryConstraint[] = []
+) {
+  const firestore = getFirestore();
+  const collectionRef = collection(firestore, path);
+  const q = query(collectionRef, ...constraints);
+  
+  return onSnapshot(q, (snapshot) => {
+    // Handle snapshot updates
+  });
+}
+```
+
+## TypeScript Guidelines
+
+### Type Definitions
+```typescript
+// src/lib/types/example.ts
+import type { DocumentData, CollectionReference, Query } from 'firebase/firestore';
+
+export interface ComponentProps {
+  ref: CollectionReference | Query | string;
+  startWith?: DocumentData[];
+  queryConstraints?: QueryConstraint[];
+}
+
+export interface SlotProps {
+  data: DocumentData[];
+  ref: CollectionReference | Query;
+  firestore: Firestore;
+  count: number;
+}
+
+export type ComponentSnippet = Snippet<[DocumentData[], CollectionReference | Query, Firestore, number]>;
+```
+
+### Generic Types
+Use generic types for reusable components:
+```typescript
+interface NodeProps<T = DocumentData> {
+  ref: string | DocumentReference;
+  startWith?: T;
+  transform?: (data: DocumentData) => T;
+}
+```
+
+## Styling Guidelines
+
+### Tailwind CSS Usage
+```svelte
+<style>
+  /* Use Tailwind classes for styling */
+  .component {
+    @apply p-4 border border-gray-200 rounded-lg;
+  }
+  
+  .loading {
+    @apply flex items-center justify-center p-8;
+  }
+  
+  .error {
+    @apply bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg;
+  }
+</style>
+```
+
+### Component Styling
+```svelte
+<div class="firekit-component">
+  {#if loading}
+    <div class="loading-state">
+      <slot name="loading">
+        <div class="default-loading">Loading...</div>
+      </slot>
+    </div>
+  {:else if error}
+    <div class="error-state">
+      <slot name="error" {error}>
+        <div class="default-error">
+          <h3>Error</h3>
+          <p>{error.message}</p>
+        </div>
+      </slot>
+    </div>
+  {:else}
+    <div class="content-state">
+      <slot {data} {ref} {firestore} {count} />
+    </div>
+  {/if}
+</div>
+```
+
+## Documentation Standards
+
+### Component Documentation
+```markdown
+---
+title: ComponentName
+description: Brief description of the component
+---
+
+# ComponentName
+
+Detailed description of the component's purpose and functionality.
+
+## Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `ref` | `string \| CollectionReference` | ✅ | Reference to the collection |
+
+## Examples
+
+### Basic Usage
+```svelte
+<ComponentName ref="posts" let:data>
+  {#each data as item}
+    <div>{item.title}</div>
+  {/each}
+</ComponentName>
+```
+```
+
+## Testing Guidelines
+
+### Component Testing
+```typescript
+// Test component rendering and state changes
+import { render, screen } from '@testing-library/svelte';
+import { Collection } from '../Collection.svelte';
+
+describe('Collection', () => {
+  it('should render loading state initially', () => {
+    render(Collection, { props: { ref: 'posts' } });
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+  });
+});
+```
+
+## Performance Optimization
+
+### Subscription Management
+```svelte
+<script>
+  import { onDestroy } from 'svelte';
+  
+  let unsubscribe: (() => void) | null = null;
+  
+  $effect(() => {
+    if (ref) {
+      unsubscribe = onSnapshot(ref, (snapshot) => {
+        // Handle updates
+      });
+    }
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  });
+</script>
+```
+
+### Lazy Loading
+```svelte
+<script>
+  let shouldLoad = $state(false);
+</script>
+
+<button onclick={() => shouldLoad = true}>Load Data</button>
+
+{#if shouldLoad}
+  <Collection ref="posts" let:data>
+    <!-- Content -->
+  </Collection>
+{/if}
+```
+
+## Security Considerations
+
+### Input Validation
+```typescript
+function validateCollectionPath(path: string): boolean {
+  // Validate Firebase collection path
+  const pathRegex = /^[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_-]+)*$/;
+  return pathRegex.test(path);
+}
+```
+
+### Error Boundaries
+```svelte
+<script>
+  import { onError } from 'svelte';
+  
+  onError(({ error }) => {
+    console.error('Component error:', error);
+    // Handle error gracefully
+  });
+</script>
+```
+
+## Code Quality Standards
+
+### ESLint Rules
+- Use TypeScript strict mode
+- Enforce consistent naming conventions
+- Require proper error handling
+- Use Svelte 5 runes appropriately
+
+### Prettier Configuration
+- 2 spaces for indentation
+- Single quotes for strings
+- Semicolons required
+- Trailing commas in objects and arrays
+
+## Common Patterns to Follow
+
+1. **Always use TypeScript interfaces for props**
+2. **Implement proper loading and error states**
+3. **Use slot-based APIs for flexibility**
+4. **Handle Firebase subscription cleanup**
+5. **Provide meaningful default content**
+6. **Use Svelte 5 runes for state management**
+7. **Implement proper error boundaries**
+8. **Follow Firebase security best practices**
+
+## Anti-Patterns to Avoid
+
+1. **Don't use reactive statements when runes are available**
+2. **Don't forget to unsubscribe from Firebase listeners**
+3. **Don't hardcode Firebase paths**
+4. **Don't ignore error states**
+5. **Don't use any type when specific types are available**
+6. **Don't mix different state management patterns**
+
+This template ensures consistent, maintainable, and high-quality code across the Svelte Firekit library. 
