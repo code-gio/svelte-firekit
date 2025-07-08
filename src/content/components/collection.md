@@ -178,15 +178,15 @@ Use reactive query constraints:
 	import { Collection } from 'svelte-firekit';
 	import { where, orderBy, limit } from 'firebase/firestore';
 
-	let category = 'all';
-	let sortBy = 'createdAt';
-	let limitCount = 10;
+	let category = $state('all');
+	let sortBy = $state('createdAt');
+	let limitCount = $state(10);
 
-	$: queryConstraints = [
+	let queryConstraints = $derived([
 		...(category !== 'all' ? [where('category', '==', category)] : []),
 		orderBy(sortBy, 'desc'),
 		limit(limitCount)
-	];
+	]);
 </script>
 
 <div class="filters">

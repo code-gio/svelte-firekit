@@ -173,7 +173,7 @@ Show custom loading content during verification:
 
 	async function complexVerification(user, auth) {
 		// Simulate complex verification process
-		await new Promise(resolve => setTimeout(resolve, 2000));
+		await new Promise((resolve) => setTimeout(resolve, 2000));
 		return user.emailVerified;
 	}
 </script>
@@ -181,7 +181,9 @@ Show custom loading content during verification:
 <CustomGuard
 	verificationChecks={[complexVerification]}
 	redirectTo="/unauthorized"
-	let:user let:auth let:signOut
+	let:user
+	let:auth
+	let:signOut
 >
 	{#snippet fallback()}
 		<div class="verification-loading">
@@ -196,7 +198,7 @@ Show custom loading content during verification:
 		</div>
 	{/snippet}
 
-	{#snippet default(user, auth, signOut)}
+	{#snippet children(user, auth, signOut)}
 		<div class="verified-content">
 			<h1>Access Granted!</h1>
 			<p>Welcome, {user.displayName}</p>
@@ -225,7 +227,7 @@ The `children` slot receives three parameters:
 </script>
 
 <CustomGuard let:user let:auth let:signOut>
-	{#snippet default(user: UserProfile, auth: Auth, signOut: () => Promise<void>)}
+	{#snippet children(user: UserProfile, auth: Auth, signOut: () => Promise<void>)}
 		<div class="protected-content">
 			<div class="user-header">
 				<img src={user.photoURL} alt={user.displayName} class="avatar" />
@@ -617,7 +619,9 @@ Provide fallback content for errors:
 <CustomGuard
 	verificationChecks={[complexVerification]}
 	redirectTo="/error"
-	let:user let:auth let:signOut
+	let:user
+	let:auth
+	let:signOut
 >
 	{#snippet fallback()}
 		<div class="verification-fallback">
@@ -635,7 +639,7 @@ Provide fallback content for errors:
 		</div>
 	{/snippet}
 
-	{#snippet default(user, auth, signOut)}
+	{#snippet children(user, auth, signOut)}
 		<div class="success-content">
 			<h1>Access Granted</h1>
 			<p>Welcome, {user.displayName}!</p>

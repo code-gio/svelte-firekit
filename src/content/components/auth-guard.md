@@ -85,7 +85,7 @@ Show custom loading content while checking authentication:
 		</div>
 	{/snippet}
 
-	{#snippet default(user, auth, signOut)}
+	{#snippet children(user, auth, signOut)}
 		<h1>Welcome, {user.displayName}!</h1>
 		<button onclick={signOut}>Sign Out</button>
 	{/snippet}
@@ -112,7 +112,7 @@ The `children` slot receives three parameters:
 </script>
 
 <AuthGuard requireAuth={true} redirectTo="/login">
-	{#snippet default(user: UserProfile, auth: Auth, signOut: () => Promise<void>)}
+	{#snippet children(user: UserProfile, auth: Auth, signOut: () => Promise<void>)}
 		<div class="user-profile">
 			<img src={user.photoURL} alt={user.displayName} />
 			<h1>Welcome, {user.displayName}!</h1>
@@ -204,7 +204,7 @@ Handle different scenarios with custom logic:
 	import { page } from '$app/stores';
 
 	// Dynamic redirect based on current page
-	$: redirectPath = $page.url.pathname.startsWith('/admin') ? '/admin/login' : '/login';
+	let redirectPath = $derived($page.url.pathname.startsWith('/admin') ? '/admin/login' : '/login');
 </script>
 
 <AuthGuard requireAuth={true} redirectTo={redirectPath}>
@@ -334,7 +334,7 @@ If the component doesn't render protected content:
 </script>
 
 <AuthGuard requireAuth={true} redirectTo="/login">
-	{#snippet default(user, auth, signOut)}
+	{#snippet children(user, auth, signOut)}
 		<div class="debug">
 			<p>User: {user?.uid}</p>
 			<p>Authenticated: {firekitAuth.isAuthenticated()}</p>

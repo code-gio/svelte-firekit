@@ -217,10 +217,10 @@ Use reactive image paths:
 <script>
 	import { DownloadURL } from 'svelte-firekit';
 
-	let userId = 'user123';
-	let imageSize = 'large';
+	let userId = $state('user123');
+	let imageSize = $state('large');
 
-	$: imagePath = `users/${userId}/profile-${imageSize}.jpg`;
+	let imagePath = $derived(`users/${userId}/profile-${imageSize}.jpg`);
 </script>
 
 <div class="user-profile">
