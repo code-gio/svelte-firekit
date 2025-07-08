@@ -108,20 +108,18 @@ const mergeResult = await firekitDocMutations.set(
 import { firekitDocMutations } from 'svelte-firekit';
 
 // Get single document
-const user = await firekitDocMutations.get('users/123');
-if (user.exists()) {
-	console.log('User data:', user.data());
+const result = await firekitDocMutations.getDoc('users/123');
+if (result.success) {
+	console.log('User data:', result.data);
 }
 
-// Get multiple documents
-const userIds = ['123', '456', '789'];
-const users = await firekitDocMutations.getAll('users', userIds);
+// Check if document exists
+const existsResult = await firekitDocMutations.exists('users/123');
+if (existsResult.exists) {
+	console.log('Document exists');
+}
 
-users.forEach((user) => {
-	if (user.exists()) {
-		console.log('User:', user.data());
-	}
-});
+// Note: For multiple documents, use firekitCollection with where clauses
 ```
 
 ### Update Documents
@@ -163,13 +161,9 @@ import { firekitDocMutations } from 'svelte-firekit';
 // Delete single document
 await firekitDocMutations.delete('users/123');
 
-// Delete with confirmation
-const confirmed = await firekitDocMutations.delete('users/123', {
-	requireConfirmation: true,
-	confirmationMessage: 'Are you sure you want to delete this user?'
-});
-
-if (confirmed) {
+// Delete document
+const result = await firekitDocMutations.delete('users/123');
+if (result.success) {
 	console.log('User deleted successfully');
 }
 ```
@@ -181,35 +175,33 @@ if (confirmed) {
 ```typescript
 import { firekitDocMutations } from 'svelte-firekit';
 
-// Batch write operations
-const batch = firekitDocMutations.batch();
+// Batch operations
+const batchResult = await firekitDocMutations.batch([
+	{ type: 'create', path: 'users', data: { name: 'Alice', email: 'alice@example.com' } },
+	{ type: 'update', path: 'users/123', data: { age: 31 } },
+	{ type: 'delete', path: 'users/456' }
+]);
 
-// Add operations to batch
-batch.add('users', { name: 'Alice', email: 'alice@example.com' });
-batch.update('users/123', { age: 31 });
-batch.delete('users/456');
-
-// Execute batch
-try {
-	await batch.commit();
+if (batchResult.success) {
 	console.log('Batch operations completed');
-} catch (error) {
-	console.error('Batch failed:', error);
+} else {
+	console.error('Batch failed:', batchResult.error);
 }
 
-// Batch with validation
-const validatedBatch = firekitDocMutations.batch({
-	validate: true,
-	timestamps: true
-});
-
-validatedBatch.add('posts', {
-	title: 'New Post',
-	content: 'Post content',
-	authorId: 'user123'
-});
-
-await validatedBatch.commit();
+// Batch with configuration
+const validatedBatchResult = await firekitDocMutations.batch(
+	[
+		{
+			type: 'create',
+			path: 'posts',
+			data: { title: 'New Post', content: 'Post content', authorId: 'user123' }
+		}
+	],
+	{
+		validate: true,
+		timestamps: true
+	}
+);
 ```
 
 ### Transaction Operations
@@ -217,18 +209,11 @@ await validatedBatch.commit();
 ```typescript
 import { firekitDocMutations } from 'svelte-firekit';
 
-// Run operations in transaction
-const result = await firekitDocMutations.runTransaction(async (transaction) => {
-	// Read operations
-	const userDoc = await transaction.get('users/123');
-	const userData = userDoc.data();
-
-	// Update based on current data
-	const newBalance = userData.balance + 100;
-
-	// Write operations
-	transaction.update('users/123', { balance: newBalance });
-	transaction.add('transactions', {
+// Note: Transactions are not directly supported in this version
+// Use batch operations for multiple related changes
+const batchResult = await firekitDocMutations.batch([
+	{ type: 'update', path: 'users/123', data: { balance: newBalance } },
+	{ type: 'create', path: 'transactions', data: {
 		userId: '123',
 		amount: 100,
 		type: 'credit',
@@ -247,20 +232,14 @@ console.log('Transaction completed, new balance:', result.newBalance);
 import { firekitDocMutations } from 'svelte-firekit';
 
 // Array union (add unique elements)
-await firekitDocMutations.update('users/123', {
-	tags: firekitDocMutations.arrayUnion('javascript', 'svelte')
-});
+await firekitDocMutations.arrayUnion('users/123', 'tags', ['javascript', 'svelte']);
 
 // Array remove (remove elements)
-await firekitDocMutations.update('users/123', {
-	tags: firekitDocMutations.arrayRemove('old-tag')
-});
+await firekitDocMutations.arrayRemove('users/123', 'tags', ['old-tag']);
 
 // Increment numeric values
-await firekitDocMutations.update('posts/123', {
-	views: firekitDocMutations.increment(1),
-	likes: firekitDocMutations.increment(5)
-});
+await firekitDocMutations.increment('posts/123', 'views', 1);
+await firekitDocMutations.increment('posts/123', 'likes', 5);
 ```
 
 ## Data Validation

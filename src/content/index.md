@@ -70,12 +70,11 @@ PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
 	const userDoc = firekitDoc('users/123');
 
 	// Reactive collection
-	const posts = firekitCollection(
-		'posts',
+	const posts = firekitCollection('posts', [
 		where('published', '==', true),
 		orderBy('createdAt', 'desc'),
 		limit(10)
-	);
+	]);
 </script>
 
 {#if isAuthenticated}
@@ -154,12 +153,11 @@ import { firekitCollection, where, orderBy, limit } from 'svelte-firekit';
 const users = firekitCollection<User>('users');
 
 // With query constraints
-const activeUsers = firekitCollection<User>(
-	'users',
+const activeUsers = firekitCollection<User>('users', [
 	where('active', '==', true),
 	orderBy('name'),
 	limit(10)
-);
+]);
 
 // Advanced options
 const paginatedUsers = firekitCollection<User>('users', {

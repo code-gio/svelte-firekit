@@ -88,13 +88,12 @@ const activeUsers = firekitCollection<User>('users', [
 ]);
 
 // Multiple conditions
-const recentPosts = firekitCollection<Post>(
-	'posts',
+const recentPosts = firekitCollection<Post>('posts', [
 	where('published', '==', true),
 	where('authorId', '==', userId),
 	orderBy('createdAt', 'desc'),
 	limit(20)
-);
+]);
 ```
 
 ### With Options
@@ -121,30 +120,27 @@ const posts = firekitCollection<Post>('posts', {
 import { firekitCollection, where, orderBy, limit, startAfter } from 'svelte-firekit';
 
 // Complex query with multiple conditions
-const featuredPosts = firekitCollection<Post>(
-	'posts',
+const featuredPosts = firekitCollection<Post>('posts', [
 	where('published', '==', true),
 	where('featured', '==', true),
 	where('category', 'in', ['tech', 'design']),
 	orderBy('createdAt', 'desc'),
 	orderBy('views', 'desc'),
 	limit(10)
-);
+]);
 
 // Query with array conditions
-const postsWithTags = firekitCollection<Post>(
-	'posts',
+const postsWithTags = firekitCollection<Post>('posts', [
 	where('tags', 'array-contains-any', ['javascript', 'svelte']),
 	where('published', '==', true)
-);
+]);
 
 // Query with date ranges
-const recentPosts = firekitCollection<Post>(
-	'posts',
+const recentPosts = firekitCollection<Post>('posts', [
 	where('createdAt', '>=', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
 	where('published', '==', true),
 	orderBy('createdAt', 'desc')
-);
+]);
 ```
 
 ### Dynamic Queries
@@ -157,11 +153,10 @@ const recentPosts = firekitCollection<Post>(
 	let sortBy = 'createdAt';
 
 	// Dynamic collection based on reactive variables
-	const posts = firekitCollection<Post>(
-		'posts',
+	const posts = firekitCollection<Post>('posts', [
 		...(category !== 'all' ? [where('category', '==', category)] : []),
 		orderBy(sortBy, 'desc')
-	);
+	]);
 
 	const postsData = $derived(posts.data);
 </script>
@@ -231,7 +226,7 @@ async function goToPage(page: number) {
 	import { firekitCollection, orderBy, limit } from 'svelte-firekit';
 	import { onMount } from 'svelte';
 
-	const posts = firekitCollection<Post>('posts', orderBy('createdAt', 'desc'), limit(20), {
+	const posts = firekitCollection<Post>('posts', [orderBy('createdAt', 'desc'), limit(20)], {
 		pagination: {
 			enabled: true,
 			pageSize: 20,

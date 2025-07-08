@@ -84,24 +84,8 @@ const error = $derived(upload.error);
 ```typescript
 import { firekitUploadTask } from 'svelte-firekit';
 
-// Upload with metadata and options
-const upload = firekitUploadTask('uploads/image.jpg', file, {
-	metadata: {
-		customMetadata: {
-			uploadedBy: 'user123',
-			category: 'profile'
-		},
-		contentType: 'image/jpeg',
-		cacheControl: 'public, max-age=3600'
-	},
-	retry: {
-		enabled: true,
-		maxAttempts: 3
-	},
-	onProgress: (progress) => {
-		console.log(`Upload progress: ${progress}%`);
-	}
-});
+// Upload file
+const upload = firekitUploadTask('uploads/image.jpg', file);
 ```
 
 ### Upload with Validation
@@ -109,21 +93,12 @@ const upload = firekitUploadTask('uploads/image.jpg', file, {
 ```typescript
 import { firekitUploadTask } from 'svelte-firekit';
 
-// Upload with file validation
-const upload = firekitUploadTask('uploads/document.pdf', file, {
-	validate: {
-		maxSize: 10 * 1024 * 1024, // 10MB
-		allowedTypes: ['application/pdf', 'image/jpeg', 'image/png'],
-		allowedExtensions: ['.pdf', '.jpg', '.png']
-	},
-	onValidationError: (error) => {
-		console.error('Validation failed:', error);
-	}
-});
+// Upload file (validation should be done before calling firekitUploadTask)
+const upload = firekitUploadTask('uploads/document.pdf', file);
 
-// Check validation state
-const isValid = $derived(upload.isValid);
-const validationError = $derived(upload.validationError);
+// Check upload state
+const progress = $derived(upload.progress);
+const error = $derived(upload.error);
 ```
 
 ### Multiple File Upload
@@ -210,13 +185,8 @@ $effect(() => {
 ```typescript
 import { firekitDownloadUrl } from 'svelte-firekit';
 
-// Download URL with options
-const downloadUrl = firekitDownloadUrl('uploads/image.jpg', {
-	expires: 3600, // 1 hour
-	action: 'read',
-	responseDisposition: 'attachment; filename="image.jpg"',
-	responseType: 'blob'
-});
+// Get download URL
+const downloadUrl = firekitDownloadUrl('uploads/image.jpg');
 
 // Force refresh URL
 await downloadUrl.refresh();
@@ -269,17 +239,12 @@ $effect(() => {
 ```typescript
 import { firekitStorageList } from 'svelte-firekit';
 
-// List with options
-const storageList = firekitStorageList('uploads/', {
-	maxResults: 100,
-	pageToken: null,
-	prefix: 'images/',
-	delimiter: '/'
-});
+// List files
+const storageList = firekitStorageList('uploads/');
 
-// Access pagination
-const hasMore = $derived(storageList.hasMore);
-const nextPageToken = $derived(storageList.nextPageToken);
+// Access file list
+const items = $derived(storageList.items);
+const prefixes = $derived(storageList.prefixes);
 
 // Load more files
 async function loadMore() {

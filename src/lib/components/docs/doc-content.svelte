@@ -14,6 +14,6 @@
 	});
 </script>
 
-<div class="prose prose-slate dark:prose-invert max-w-none" bind:this={contentRef}>
+<div class="prose prose-slate dark:prose-invert mx-auto max-w-4xl" bind:this={contentRef}>
 	<data.doc />
 </div>
