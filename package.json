@@ -1,6 +1,6 @@
 {
 	"name": "svelte-firekit",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"license": "MIT",
 	"scripts": {
 		"dev": "vite dev",
@@ -15,7 +15,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/code-gio/svelte-firekit.git"
+		"url": "git+https://github.com/code-gio/svelte-firekit.git"
 	},
 	"description": "A Svelte library for Firebase integration",
 	"keywords": [
@@ -44,7 +44,8 @@
 	},
 	"peerDependencies": {
 		"firebase": "^11.9.1",
-		"svelte": "^5.0.0"
+		"svelte": "^5.0.0",
+		"@sveltejs/kit": "^2.16.0"
 	},
 	"devDependencies": {
 		"@dnd-kit-svelte/core": "^0.0.8",
@@ -54,7 +55,6 @@
 		"@internationalized/date": "^3.8.2",
 		"@lucide/svelte": "^0.515.0",
 		"@sveltejs/adapter-auto": "^6.0.0",
-		"@sveltejs/kit": "^2.16.0",
 		"@sveltejs/package": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
 		"@tabler/icons-svelte": "^3.34.0",
