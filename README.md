@@ -1,445 +1,502 @@
-# Svelte Firekit
+# Svelte Firebase Library
 
-Svelte Firekit is a powerful Firebase toolkit for SvelteKit applications, providing a comprehensive set of utilities, stores, and components for seamless Firebase integration. Whether you're building a micro SaaS, web application, or any Firebase-powered project, Svelte Firekit streamlines your development process.
+A comprehensive, production-ready Firebase integration library for Svelte 5 applications. Built with reactive state management using Svelte 5 runes, providing a complete solution for authentication, Firestore, Storage, Realtime Database, Analytics, and more.
 
-## Installation
+## 🚀 Features
+
+- **Complete Firebase Integration** - All Firebase products supported
+- **Svelte 5 Runes** - Reactive state management with optimal performance
+- **TypeScript First** - Full type safety and excellent developer experience
+- **SSR Compatible** - Server-side rendering support
+- **Real-time Updates** - Live data synchronization across all services
+- **Authentication System** - Complete auth solution with multiple providers
+- **Advanced Querying** - Complex Firestore queries with type safety
+- **File Management** - Storage upload/download with progress tracking
+- **Presence System** - User online/offline tracking with geolocation
+- **Analytics Integration** - Comprehensive event tracking
+- **Error Handling** - Robust error management with retry mechanisms
+- **Performance Optimized** - Persistent cache, memory management, and optimizations
+
+## 📦 Installation
 
 ```bash
-npm install firebase svelte-firekit
+npm install svelte-firekit firebase
 ```
 
-## Configuration
+## 🔧 Quick Setup
 
-Svelte Firekit automatically manages your Firebase configuration through environment variables. Create a `.env` file in your project root with the following variables:
+### 1. Environment Variables
 
-```env
+Create a `.env` file with your Firebase configuration:
+
+```dotenv
 PUBLIC_FIREBASE_API_KEY=your_api_key
-PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
+PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
 PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 PUBLIC_FIREBASE_APP_ID=your_app_id
 PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
 
-The configuration is automatically handled by Firekit - no manual setup required. If any required environment variables are missing, Firekit will throw a helpful error indicating which variables need to be set.
-
-## Usage Example
-
-Here's a simple example showing how to display the current user's name:
-
-```svelte
-<script>
-	import { firekitUser } from 'svelte-firekit';
-</script>
-
-Hello {firekitUser.displayName}
-```
-
-The `firekitUser` store provides access to the current user's information and authentication state.
-
-## Core Features
-
-### 🔥 Firebase Integration
-
-- Zero-config Firebase setup through environment variables
-- Automatic initialization and app management
-- Built-in error handling and connection state management
-- Type-safe configuration management
-
-### 🔐 Authentication
-
-- Complete authentication system with built-in components
-- Support for multiple authentication providers:
-  - Email/Password
-  - Google
-  - GitHub
-  - Custom providers
-- User state management and persistence through `firekitUser` store
-
-### 📚 Firestore Integration
-
-- Reactive data stores for real-time updates
-- Simplified CRUD operations
-- Batch operations and transactions
-- Type-safe document references
-- Automatic data serialization/deserialization
-
-### 📦 Storage Management
-
-- File upload and download utilities
-- Progress tracking and status updates
-- Storage security rules helpers
-- Image optimization utilities
-
-### ⚡ Server-Side Rendering
-
-- Full SSR compatibility
-- Hydration support
-- Server-side data fetching
-- SEO-friendly rendering
-
-### 🎯 Type Safety
-
-- Built with TypeScript
-- Complete type definitions
-- Intelligent autocomplete
-- Runtime type checking
-- Type-safe Firestore operations
-
-## Components
-
-Svelte Firekit provides a comprehensive set of Svelte components for easy Firebase integration:
-
-### 🔧 Core Components
-
-#### `FirebaseApp`
-
-The root component that initializes Firebase and provides context to child components.
+### 2. Initialize Firebase
 
 ```svelte
 <script>
 	import { FirebaseApp } from 'svelte-firekit';
 </script>
 
-<FirebaseApp let:children>
-	<!-- Your app content here -->
+<FirebaseApp>
+	<!-- Your app content -->
 </FirebaseApp>
 ```
 
-### 🔐 Authentication Components
-
-#### `AuthGuard`
-
-Protects routes and content based on authentication state.
+### 3. Basic Usage
 
 ```svelte
 <script>
-	import { AuthGuard } from 'svelte-firekit';
+	import { firekitUser, firekitCollection, firekitDoc } from 'svelte-firekit';
+
+	// Reactive user state
+	const user = $derived(firekitUser.user);
+	const isAuthenticated = $derived(firekitUser.isAuthenticated);
+
+	// Reactive document
+	const userDoc = firekitDoc('users/123');
+
+	// Reactive collection
+	const posts = firekitCollection('posts', [
+		where('published', '==', true),
+		orderBy('createdAt', 'desc'),
+		limit(10)
+	]);
 </script>
 
-<AuthGuard requireAuth={true} redirectTo="/login" let:children let:user let:auth let:signOut>
-	<h1>Welcome, {user.displayName}!</h1>
-	<button on:click={signOut}>Sign Out</button>
+{#if isAuthenticated}
+	<h1>Welcome, {user?.displayName}!</h1>
+
+	{#if userDoc.loading}
+		<p>Loading user data...</p>
+	{:else if userDoc.data}
+		<p>Email: {userDoc.data.email}</p>
+	{/if}
+
+	<h2>Recent Posts</h2>
+	{#each posts.data as post}
+		<article>
+			<h3>{post.title}</h3>
+			<p>{post.content}</p>
+		</article>
+	{/each}
+{/if}
+```
+
+## 📚 Core Services
+
+### Authentication
+
+```typescript
+import { firekitAuth, firekitUser } from 'svelte-firekit';
+
+// Sign in methods
+await firekitAuth.signInWithEmail('user@example.com', 'password');
+await firekitAuth.signInWithGoogle();
+await firekitAuth.signInWithFacebook();
+await firekitAuth.signInWithApple();
+
+// User registration
+await firekitAuth.registerWithEmail('user@example.com', 'password', 'John Doe');
+
+// Reactive user state
+const user = $derived(firekitUser.user);
+const isAuthenticated = $derived(firekitUser.isAuthenticated);
+const isEmailVerified = $derived(firekitUser.isEmailVerified);
+```
+
+### Firestore Documents
+
+```typescript
+import { firekitDoc, firekitDocOnce } from 'svelte-firekit';
+
+// Real-time document subscription
+const userDoc = firekitDoc<User>('users/123', {
+	name: 'Loading...',
+	email: ''
+});
+
+// One-time document fetch
+const userData = firekitDocOnce<User>('users/123');
+
+// Access reactive state
+const isLoading = $derived(userDoc.loading);
+const userData = $derived(userDoc.data);
+const userError = $derived(userDoc.error);
+
+$effect(() => {
+	if (isLoading) console.log('Loading...');
+	if (userData) console.log('User:', userData);
+	if (userError) console.error('Error:', userError);
+});
+```
+
+### Firestore Collections
+
+```typescript
+import { firekitCollection, where, orderBy, limit } from 'svelte-firekit';
+
+// Simple collection
+const users = firekitCollection<User>('users');
+
+// With query constraints
+const activeUsers = firekitCollection<User>('users', [
+	where('active', '==', true),
+	orderBy('name'),
+	limit(10)
+]);
+
+// Advanced options
+const paginatedUsers = firekitCollection<User>('users', {
+	pagination: { enabled: true, pageSize: 20 },
+	cache: { enabled: true, ttl: 300000 }
+});
+
+// Access reactive state
+const usersData = $derived(users.data);
+const usersLoading = $derived(users.loading);
+const usersError = $derived(users.error);
+
+$effect(() => {
+	console.log('Users:', usersData);
+	console.log('Loading:', usersLoading);
+	console.log('Error:', usersError);
+});
+```
+
+### Document Mutations
+
+```typescript
+import { firekitDocMutations } from 'svelte-firekit';
+
+// Create document
+const result = await firekitDocMutations.add(
+	'users',
+	{
+		name: 'John Doe',
+		email: 'john@example.com'
+	},
+	{
+		timestamps: true,
+		validate: true
+	}
+);
+
+// Update document
+await firekitDocMutations.update('users/123', {
+	name: 'Jane Doe'
+});
+
+// Delete document
+await firekitDocMutations.delete('users/123');
+
+// Batch operations
+const batchResult = await firekitDocMutations.batch([
+	{ type: 'create', path: 'users', data: userData },
+	{ type: 'update', path: 'profiles/123', data: profileUpdate }
+]);
+```
+
+### Storage Management
+
+```typescript
+import { firekitDownloadUrl, firekitUploadTask, firekitStorageList } from 'svelte-firekit';
+
+// Download URL
+const imageUrl = firekitDownloadUrl('images/photo.jpg');
+const downloadUrl = $derived(imageUrl.url);
+
+// File upload with progress
+const upload = firekitUploadTask('uploads/file.pdf', file);
+const uploadProgress = $derived(upload.progress);
+const uploadCompleted = $derived(upload.completed);
+const uploadDownloadUrl = $derived(upload.downloadURL);
+
+$effect(() => {
+	if (downloadUrl) console.log('Image URL:', downloadUrl);
+	console.log('Upload progress:', uploadProgress);
+	if (uploadCompleted) console.log('Download URL:', uploadDownloadUrl);
+});
+
+// Storage listing
+const files = firekitStorageList('uploads');
+const fileItems = $derived(files.items);
+const filePrefixes = $derived(files.prefixes);
+
+$effect(() => {
+	console.log('Files:', fileItems);
+	console.log('Folders:', filePrefixes);
+});
+```
+
+### Realtime Database
+
+```typescript
+import { firekitRealtimeDB, firekitRealtimeList } from 'svelte-firekit';
+
+// Single value
+const userStatus = firekitRealtimeDB<{ online: boolean }>('users/123/status');
+
+// List data
+const messages = firekitRealtimeList<Message>('messages');
+
+// Access data
+const statusData = $derived(userStatus.data);
+const messagesList = $derived(messages.list);
+
+$effect(() => {
+	console.log('Status:', statusData);
+	console.log('Messages:', messagesList);
+});
+
+// Update data
+await userStatus.set({ online: true });
+await messages.push({ text: 'Hello', userId: '123' });
+```
+
+### Presence System
+
+```typescript
+import { firekitPresence } from 'svelte-firekit';
+
+// Initialize presence
+await firekitPresence.initialize(user, {
+	geolocation: {
+		enabled: true,
+		type: 'browser',
+		requireConsent: true
+	}
+});
+
+// Set presence status
+await firekitPresence.setPresence('online');
+
+// Access reactive state
+const presenceStatus = $derived(firekitPresence.status);
+const presenceLocation = $derived(firekitPresence.location);
+const presenceSessions = $derived(firekitPresence.sessions);
+```
+
+### Analytics
+
+```typescript
+import { firekitAnalytics } from 'svelte-firekit';
+
+// Track custom events
+firekitAnalytics.trackEvent('button_click', {
+	button_name: 'signup',
+	page_location: '/home'
+});
+
+// Track purchases
+firekitAnalytics.trackPurchase({
+	transaction_id: 'T12345',
+	value: 29.99,
+	currency: 'USD',
+	items: [{ item_id: 'prod_123', item_name: 'Premium Plan' }]
+});
+
+// Set user properties
+firekitAnalytics.setUserProperties({
+	user_type: 'premium',
+	subscription_plan: 'pro'
+});
+```
+
+## 🧩 Components
+
+### Authentication Components
+
+```svelte
+<script>
+	import { AuthGuard, SignedIn, SignedOut } from 'svelte-firekit';
+</script>
+
+<!-- Route protection -->
+<AuthGuard requireAuth={true} redirectTo="/login">
+	<h1>Protected Content</h1>
 </AuthGuard>
-```
 
-#### `SignedIn`
-
-Renders content only when a user is signed in.
-
-```svelte
-<script>
-	import { SignedIn } from 'svelte-firekit';
-</script>
-
-<SignedIn let:children let:user>
-	<p>Hello, {user.displayName}!</p>
+<!-- Conditional rendering -->
+<SignedIn>
+	<h1>Welcome back!</h1>
 </SignedIn>
-```
 
-#### `SignedOut`
-
-Renders content only when no user is signed in.
-
-```svelte
-<script>
-	import { SignedOut } from 'svelte-firekit';
-</script>
-
-<SignedOut let:children let:auth>
-	<button on:click={() => signInWithGoogle()}>Sign In</button>
+<SignedOut>
+	<h1>Please sign in</h1>
 </SignedOut>
 ```
 
-#### `CustomGuard`
-
-Advanced authentication guard with custom verification checks.
+### Data Components
 
 ```svelte
 <script>
-	import { CustomGuard } from 'svelte-firekit';
-
-	const emailVerificationCheck = (user) => user.emailVerified;
+	import { Doc, Collection } from 'svelte-firekit';
 </script>
 
-<CustomGuard
-	verificationChecks={[emailVerificationCheck]}
-	redirectTo="/verify-email"
-	let:children
-	let:user
-	let:auth
-	let:signOut
->
-	<p>Your email is verified!</p>
-</CustomGuard>
-```
+<!-- Document component -->
+<Doc ref="users/123" let:data let:ref let:firestore>
+	<h1>{data.name}</h1>
+	<p>{data.email}</p>
+</Doc>
 
-### 📚 Firestore Components
-
-#### `Collection`
-
-Reactive component for Firestore collections with real-time updates.
-
-```svelte
-<script>
-	import { Collection } from 'svelte-firekit';
-</script>
-
-<Collection ref="users" let:children let:data let:ref let:firestore let:count>
-	{#each data as user}
-		<div>{user.name}</div>
+<!-- Collection component -->
+<Collection ref="posts" let:data let:ref let:firestore let:count>
+	<h1>Posts ({count})</h1>
+	{#each data as post}
+		<article>
+			<h2>{post.title}</h2>
+			<p>{post.content}</p>
+		</article>
 	{/each}
-	<p>Total users: {count}</p>
 </Collection>
 ```
 
-#### `Ddoc`
-
-Reactive component for individual Firestore documents.
+### Storage Components
 
 ```svelte
 <script>
-	import { Ddoc } from 'svelte-firekit';
+	import { StorageList, DownloadURL, UploadTask } from 'svelte-firekit';
 </script>
 
-<Ddoc ref="users/123" let:children let:data let:ref let:firestore>
-	{#if data}
-		<h1>{data.name}</h1>
-		<p>{data.email}</p>
+<!-- Storage listing -->
+<StorageList path="uploads" let:items let:prefixes>
+	<h2>Files</h2>
+	{#each items as item}
+		<p>{item.name}</p>
+	{/each}
+
+	<h2>Folders</h2>
+	{#each prefixes as prefix}
+		<p>{prefix.name}</p>
+	{/each}
+</StorageList>
+
+<!-- Download URL -->
+<DownloadURL path="images/photo.jpg" let:url let:loading let:error>
+	{#if loading}
+		<p>Loading image...</p>
+	{:else if url}
+		<img src={url} alt="Photo" />
+	{:else if error}
+		<p>Error: {error.message}</p>
 	{/if}
-</Ddoc>
-```
+</DownloadURL>
 
-### 📦 Storage Components
-
-#### `UploadTask`
-
-Handles file uploads with progress tracking.
-
-```svelte
-<script>
-	import { UploadTask } from 'svelte-firekit';
-
-	let file;
-</script>
-
-<input type="file" bind:files={file} />
-
-<UploadTask
-	ref="images/{file.name}"
-	data={file}
-	let:children
-	let:snapshot
-	let:task
-	let:progress
-	let:storage
->
-	<div>Upload Progress: {progress}%</div>
-	{#if snapshot?.state === 'success'}
+<!-- Upload with progress -->
+<UploadTask path="uploads/file.pdf" file={selectedFile} let:progress let:completed let:error>
+	{#if !completed}
+		<div class="progress-bar">
+			<div class="progress" style="width: {progress}%"></div>
+		</div>
+		<p>{progress}% uploaded</p>
+	{:else}
 		<p>Upload complete!</p>
 	{/if}
 </UploadTask>
 ```
 
-#### `DownloadUrl`
+## 🎯 Best Practices
 
-Retrieves download URLs for storage files.
+### 1. Use Reactive State
+
+```typescript
+// ✅ Good - Reactive state
+const user = $derived(firekitUser.user);
+const isAuthenticated = $derived(firekitUser.isAuthenticated);
+
+// ❌ Avoid - Direct service calls in templates
+const user = firekitUser.getCurrentUser();
+```
+
+### 2. Handle Loading States
 
 ```svelte
-<script>
-	import { DownloadUrl } from 'svelte-firekit';
-</script>
-
-<DownloadUrl ref="images/profile.jpg" let:children let:url let:ref let:storage>
-	<img src={url} alt="Profile" />
-</DownloadUrl>
+{#if userDoc.loading}
+	<LoadingSpinner />
+{:else if userDoc.error}
+	<ErrorMessage error={userDoc.error} />
+{:else if userDoc.data}
+	<UserProfile user={userDoc.data} />
+{/if}
 ```
 
-#### `StorageList`
-
-Lists files and folders in Firebase Storage.
-
-```svelte
-<script>
-	import { StorageList } from 'svelte-firekit';
-</script>
-
-<StorageList ref="images" let:children let:list let:ref let:storage>
-	{#each list.items as item}
-		<div>{item.name}</div>
-	{/each}
-	{#each list.prefixes as prefix}
-		<div>📁 {prefix.name}</div>
-	{/each}
-</StorageList>
-```
-
-### 🔄 Realtime Database Components
-
-#### `Node`
-
-Reactive component for Realtime Database nodes.
-
-```svelte
-<script>
-	import { Node } from 'svelte-firekit';
-</script>
-
-<Node path="users/123" let:children let:data let:ref let:database>
-	{#if data}
-		<h1>{data.name}</h1>
-		<p>Status: {data.status}</p>
-	{/if}
-</Node>
-```
-
-#### `NodeList`
-
-Reactive component for Realtime Database lists.
-
-```svelte
-<script>
-	import { NodeList } from 'svelte-firekit';
-</script>
-
-<NodeList path="users" let:children let:data let:ref let:database>
-	{#each data as user}
-		<div>{user.name} - {user.status}</div>
-	{/each}
-</NodeList>
-```
-
-## Why Svelte Firekit?
-
-- **Zero Configuration**: Automatic Firebase setup through environment variables
-- **Type Safety**: Full TypeScript support with built-in type checking
-- **Rapid Development**: Get your Firebase-powered SvelteKit application up and running in minutes
-- **Best Practices**: Built following Firebase and SvelteKit best practices
-- **Production Ready**: Battle-tested in production environments
-- **Active Community**: Regular updates and active community support
-- **Extensible**: Easy to customize and extend for your specific needs
-
-## Next Steps
-
-- Check out our [Getting Started](/getting-started) guide
-- Explore the [API Reference](/api)
-- View [Examples](/examples)
-- Join our [Community](/community)
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](/contributing) for more details.
-
-## License
-
-Svelte Firekit is released under the MIT License. See the [LICENSE](/license) file for more details.
-
-# Authentication
-
-Svelte Firekit provides a comprehensive authentication system through the `firekitAuth` singleton, offering various authentication methods and user management features.
-
-## Basic Usage
+### 3. Clean Up Subscriptions
 
 ```typescript
-import { firekitAuth } from 'svelte-firekit';
-```
+import { onDestroy } from 'svelte';
 
-## Authentication Methods
+const userDoc = firekitDoc('users/123');
 
-### Google Authentication
-
-```typescript
-await firekitAuth.signInWithGoogle();
-```
-
-### Email/Password Authentication
-
-```typescript
-// Sign in
-await firekitAuth.signInWithEmail(email, password);
-
-// Register
-await firekitAuth.registerWithEmail(email, password, displayName);
-
-// Sign out
-await firekitAuth.logOut();
-```
-
-## User Management
-
-### Password Management
-
-```typescript
-// Send password reset email
-await firekitAuth.sendPasswordReset(email);
-
-// Update password (requires reauthentication)
-await firekitAuth.updateUserPassword(newPassword, currentPassword);
-```
-
-### Profile Management
-
-```typescript
-// Update user profile
-await firekitAuth.updateUserProfile({
-	displayName: 'New Name',
-	photoURL: 'https://example.com/photo.jpg'
+onDestroy(() => {
+	userDoc.dispose();
 });
 ```
 
-### Email Verification
+### 4. Use Type Safety
 
 ```typescript
-// Send verification email
-await firekitAuth.sendEmailVerificationToUser();
-```
-
-### Account Deletion
-
-```typescript
-// Delete user account
-await firekitAuth.deleteUserAccount();
-```
-
-## Automatic Firestore Integration
-
-The authentication system automatically maintains a user document in Firestore with the following information:
-
-- User ID
-- Email
-- Email verification status
-- Display name
-- Photo URL
-- Authentication provider information
-- Anonymous status
-
-## Error Handling
-
-All methods include proper error handling and return appropriate error messages. For example, password updates will return:
-
-```typescript
-{
-  success: boolean;
-  message: string;
-  code?: string; // In case of errors
+interface User {
+	id: string;
+	name: string;
+	email: string;
+	active: boolean;
 }
+
+const userDoc = firekitDoc<User>('users/123');
+const users = firekitCollection<User>('users');
 ```
 
-## Features
+### 5. Optimize Queries
 
-- 🔐 Multiple authentication providers
-- 📝 Automatic user profile management
-- 🔄 Password reset and update functionality
-- ✉️ Email verification
-- 🗑️ Account deletion
-- 🔄 Reauthentication support
-- 📚 Automatic Firestore user document management
-- ⚡ Type-safe operations
+```typescript
+// ✅ Good - Specific queries
+const activeUsers = firekitCollection('users', where('active', '==', true), limit(10));
 
-## Important Notes
+// ❌ Avoid - Fetching all data
+const allUsers = firekitCollection('users');
+```
 
-1. User data is automatically synchronized with Firestore
-2. Password updates require current password verification
-3. Account deletion removes both authentication and Firestore data
-4. All operations are fully typed for TypeScript support
+## 📚 Documentation
+
+For complete documentation, examples, and API reference, visit:
+
+**[https://sveltefirekit.com](https://sveltefirekit.com)**
+
+### Key Sections:
+
+- [Installation Guide](https://sveltefirekit.com/installation) - Complete setup guide
+- [Authentication](https://sveltefirekit.com/auth) - User authentication and management
+- [Firestore Collections](https://sveltefirekit.com/collections) - Real-time data management
+- [Document Operations](https://sveltefirekit.com/documents) - Individual document handling
+- [File Storage](https://sveltefirekit.com/storage) - File upload and management
+- [Realtime Database](https://sveltefirekit.com/realtime) - Real-time data synchronization
+- [Analytics](https://sveltefirekit.com/analytics) - User and event tracking
+- [Components](https://sveltefirekit.com/components) - Pre-built Svelte components
+- [Presence System](https://sveltefirekit.com/presence) - User online/offline tracking
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## 🆘 Support
+
+- [Documentation](https://sveltefirekit.com)
+- [GitHub Issues](https://github.com/code-gio/svelte-firekit/issues)
+- [Discussions](https://github.com/code-gio/svelte-firekit/discussions)
+
+---
+
+**Built with ❤️ for the Svelte community**
