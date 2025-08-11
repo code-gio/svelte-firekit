@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://svelte-firekit.com/sitemap.xml
+
+# Disallow crawling of development files
+Disallow: /cursorrules.txt
+Disallow: /llms.txt

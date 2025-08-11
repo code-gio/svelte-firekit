@@ -211,6 +211,70 @@ let fileData: File;
 		name="keywords"
 		content="svelte, firebase, firestore, authentication, sveltekit, mvp, realtime, typescript"
 	/>
+	
+	<!-- Canonical URL -->
+	<link rel="canonical" href="https://svelte-firekit.com/" />
+	
+	<!-- Open Graph -->
+	<meta property="og:type" content="website" />
+	<meta property="og:title" content="Svelte FireKit - Complete Firebase Integration for Svelte 5" />
+	<meta property="og:description" content="A comprehensive Svelte 5 library for Firebase integration with reactive state management, authentication, Firestore, Storage, and more. Build MVPs faster with zero-config setup." />
+	<meta property="og:url" content="https://svelte-firekit.com/" />
+	<meta property="og:site_name" content="Svelte FireKit" />
+	<meta property="og:image" content="https://svelte-firekit.com/logo.svg" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:alt" content="Svelte FireKit - Complete Firebase Integration for Svelte 5" />
+	
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Svelte FireKit - Complete Firebase Integration for Svelte 5" />
+	<meta name="twitter:description" content="A comprehensive Svelte 5 library for Firebase integration with reactive state management, authentication, Firestore, Storage, and more. Build MVPs faster with zero-config setup." />
+	<meta name="twitter:image" content="https://svelte-firekit.com/logo.svg" />
+	<meta name="twitter:creator" content="@code_gio" />
+	
+	<!-- Organization structured data -->
+	<script type="application/ld+json">
+		{
+			"@context": "https://schema.org",
+			"@type": "SoftwareApplication",
+			"name": "Svelte FireKit",
+			"description": "A comprehensive Svelte 5 library for Firebase integration with reactive state management, authentication, Firestore, Storage, and more. Build MVPs faster with zero-config setup.",
+			"url": "https://svelte-firekit.com/",
+			"applicationCategory": "DeveloperApplication",
+			"operatingSystem": "Any",
+			"programmingLanguage": "TypeScript",
+			"author": {
+				"@type": "Person",
+				"name": "Giovanni Rodriguez",
+				"url": "https://github.com/code-gio"
+			},
+			"offers": {
+				"@type": "Offer",
+				"price": "0",
+				"priceCurrency": "USD"
+			},
+			"codeRepository": "https://github.com/code-gio/svelte-firekit"
+		}
+	</script>
+	
+	<!-- Website structured data -->
+	<script type="application/ld+json">
+		{
+			"@context": "https://schema.org",
+			"@type": "WebSite",
+			"name": "Svelte FireKit",
+			"url": "https://svelte-firekit.com/",
+			"potentialAction": {
+				"@type": "SearchAction",
+				"target": {
+					"@type": "EntryPoint",
+					"urlTemplate": "https://svelte-firekit.com/docs?q={search_term_string}"
+				},
+				"query-input": "required name=search_term_string"
+			}
+		}
+	</script>
 </svelte:head>
 
 <div class="min-h-screen">
