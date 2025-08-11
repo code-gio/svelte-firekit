@@ -1,6 +1,6 @@
 ---
 title: Authentication Service
-description: Complete authentication system with multiple providers and reactive state management
+description: Firebase Authentication service with multiple providers and reactive state management
 ---
 
 # Authentication Service
@@ -14,10 +14,9 @@ The authentication service handles:
 - Multiple sign-in providers (Google, Facebook, Apple, Email/Password, Phone, Anonymous)
 - User registration and profile management
 - Email verification and password reset
-- Account deletion and data export
+- Account deletion
 - Reactive authentication state
-- Token management and refresh
-- Error handling and retry mechanisms
+- Error handling
 
 ## Quick Start
 
@@ -26,7 +25,7 @@ The authentication service handles:
 	import { firekitAuth, firekitUser } from 'svelte-firekit';
 	import { Button } from '$lib/components/ui/button';
 
-	// Reactive authentication state
+	// Reactive authentication state using Svelte 5 runes
 	const user = $derived(firekitUser.user);
 	const isAuthenticated = $derived(firekitUser.isAuthenticated);
 	const isLoading = $derived(firekitUser.loading);
@@ -70,18 +69,10 @@ import { firekitAuth } from 'svelte-firekit';
 // Sign in with existing account
 const result = await firekitAuth.signInWithEmail('user@example.com', 'password');
 
-// Register new account
+// Register new account with email/password
 const newUser = await firekitAuth.registerWithEmail(
 	'newuser@example.com',
-	'securepassword',
-	'John Doe' // Optional display name
-);
-
-// Sign in with custom display name
-const userWithName = await firekitAuth.signInWithEmail(
-	'user@example.com',
-	'password',
-	'Custom Name'
+	'securepassword'
 );
 ```
 
@@ -90,16 +81,8 @@ const userWithName = await firekitAuth.signInWithEmail(
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Sign in with Google
+// Sign in with Google popup
 const result = await firekitAuth.signInWithGoogle();
-
-// Sign in with custom provider
-const customGoogle = await firekitAuth.signInWithProvider('google', {
-	scopes: ['email', 'profile'],
-	customParameters: {
-		prompt: 'select_account'
-	}
-});
 ```
 
 ### Facebook Authentication
@@ -107,13 +90,8 @@ const customGoogle = await firekitAuth.signInWithProvider('google', {
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Sign in with Facebook
+// Sign in with Facebook popup
 const result = await firekitAuth.signInWithFacebook();
-
-// With custom permissions
-const facebookWithPermissions = await firekitAuth.signInWithProvider('facebook', {
-	scopes: ['email', 'public_profile']
-});
 ```
 
 ### Apple Authentication
@@ -121,13 +99,8 @@ const facebookWithPermissions = await firekitAuth.signInWithProvider('facebook',
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Sign in with Apple
+// Sign in with Apple popup
 const result = await firekitAuth.signInWithApple();
-
-// With custom options
-const appleWithOptions = await firekitAuth.signInWithProvider('apple', {
-	scopes: ['email', 'name']
-});
 ```
 
 ### Phone Authentication
@@ -135,11 +108,8 @@ const appleWithOptions = await firekitAuth.signInWithProvider('apple', {
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Send verification code
-await firekitAuth.sendPhoneVerificationCode('+1234567890');
-
-// Verify code and sign in
-const result = await firekitAuth.verifyPhoneCode('+1234567890', '123456');
+// Sign in with phone number (requires reCAPTCHA setup)
+const result = await firekitAuth.signInWithPhoneNumber('+1234567890', recaptchaVerifier);
 ```
 
 ### Anonymous Authentication
@@ -149,52 +119,6 @@ import { firekitAuth } from 'svelte-firekit';
 
 // Sign in anonymously
 const result = await firekitAuth.signInAnonymously();
-```
-
-### Custom Provider Authentication
-
-```typescript
-import { firekitAuth } from 'svelte-firekit';
-
-// Sign in with any custom provider
-const result = await firekitAuth.signInWithProvider('github', {
-	scopes: ['user:email']
-});
-```
-
-## User Registration
-
-### Email Registration
-
-```typescript
-import { firekitAuth } from 'svelte-firekit';
-
-// Basic registration
-const user = await firekitAuth.registerWithEmail('user@example.com', 'password');
-
-// Registration with profile data
-const userWithProfile = await firekitAuth.registerWithEmail(
-	'user@example.com',
-	'password',
-	'John Doe',
-	{
-		photoURL: 'https://example.com/avatar.jpg',
-		phoneNumber: '+1234567890'
-	}
-);
-```
-
-### Profile Completion
-
-```typescript
-import { firekitAuth } from 'svelte-firekit';
-
-// Complete profile after registration
-await firekitAuth.completeProfile({
-	displayName: 'John Doe',
-	photoURL: 'https://example.com/avatar.jpg',
-	phoneNumber: '+1234567890'
-});
 ```
 
 ## User Management
@@ -222,11 +146,8 @@ await firekitAuth.updateProfile({
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Update email address
+// Update email address (requires user to be recently authenticated)
 await firekitAuth.updateEmail('newemail@example.com');
-
-// Update email with password verification
-await firekitAuth.updateEmail('newemail@example.com', 'currentpassword');
 ```
 
 ### Update Password
@@ -234,11 +155,8 @@ await firekitAuth.updateEmail('newemail@example.com', 'currentpassword');
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Update password
+// Update password (requires user to be recently authenticated)
 await firekitAuth.updatePassword('newpassword');
-
-// Update password with current password verification
-await firekitAuth.updatePassword('newpassword', 'currentpassword');
 ```
 
 ### Delete Account
@@ -246,11 +164,8 @@ await firekitAuth.updatePassword('newpassword', 'currentpassword');
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Delete account
-await firekitAuth.deleteAccount();
-
-// Delete account with password verification
-await firekitAuth.deleteAccount('currentpassword');
+// Delete current user account
+await firekitAuth.deleteUser();
 ```
 
 ## Email Verification
@@ -260,14 +175,8 @@ await firekitAuth.deleteAccount('currentpassword');
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Send verification email
+// Send verification email to current user
 await firekitAuth.sendEmailVerification();
-
-// Send with custom action code settings
-await firekitAuth.sendEmailVerification({
-	url: 'https://yourapp.com/verify',
-	handleCodeInApp: true
-});
 ```
 
 ### Check Email Verification
@@ -275,7 +184,7 @@ await firekitAuth.sendEmailVerification({
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Reload user to check verification status
+// Reload user data to get latest verification status
 await firekitAuth.reloadUser();
 
 // Check if email is verified
@@ -291,12 +200,6 @@ import { firekitAuth } from 'svelte-firekit';
 
 // Send password reset email
 await firekitAuth.sendPasswordResetEmail('user@example.com');
-
-// Send with custom action code settings
-await firekitAuth.sendPasswordResetEmail('user@example.com', {
-	url: 'https://yourapp.com/reset-password',
-	handleCodeInApp: true
-});
 ```
 
 ### Confirm Password Reset
@@ -304,8 +207,8 @@ await firekitAuth.sendPasswordResetEmail('user@example.com', {
 ```typescript
 import { firekitAuth } from 'svelte-firekit';
 
-// Confirm password reset with action code
-await firekitAuth.confirmPasswordReset('action-code', 'newpassword');
+// Confirm password reset with action code from email
+await firekitAuth.confirmPasswordReset('action-code-from-email', 'newpassword');
 ```
 
 ## Authentication State Management
@@ -316,22 +219,43 @@ await firekitAuth.confirmPasswordReset('action-code', 'newpassword');
 <script>
 	import { firekitUser } from 'svelte-firekit';
 
-	// Reactive user state
+	// Reactive user state using Svelte 5 runes
 	const user = $derived(firekitUser.user);
 	const isAuthenticated = $derived(firekitUser.isAuthenticated);
 	const isLoading = $derived(firekitUser.loading);
 	const isEmailVerified = $derived(firekitUser.isEmailVerified);
 	const authError = $derived(firekitUser.error);
 
-	// Watch for authentication changes
+	// ✅ Use $derived for computed values
+	const welcomeMessage = $derived(
+		isAuthenticated 
+			? `Welcome back, ${user?.displayName || user?.email || 'User'}!` 
+			: 'Please sign in'
+	);
+	
+	const userInitials = $derived(
+		user?.displayName 
+			? user.displayName.split(' ').map(n => n[0]).join('').toUpperCase()
+			: user?.email?.[0].toUpperCase() || '?'
+	);
+
+	// ✅ Use $effect only for side effects (not for derived values)
 	$effect(() => {
 		if (isAuthenticated) {
-			console.log('User signed in:', user);
-		} else {
-			console.log('User signed out');
+			// Side effect: track analytics, update localStorage, etc.
+			console.log('User authenticated');
+			localStorage.setItem('lastLogin', new Date().toISOString());
 		}
 	});
 </script>
+
+<!-- Use the derived values in templates -->
+<div>
+	<h1>{welcomeMessage}</h1>
+	{#if isAuthenticated}
+		<div class="avatar">{userInitials}</div>
+	{/if}
+</div>
 ```
 
 ### Manual State Management
@@ -343,7 +267,7 @@ import { firekitAuth } from 'svelte-firekit';
 const currentUser = firekitAuth.currentUser;
 
 // Check authentication state
-const isAuthenticated = firekitAuth.isAuthenticated;
+const isAuthenticated = !!currentUser;
 
 // Listen to auth state changes
 const unsubscribe = firekitAuth.onAuthStateChanged((user) => {
@@ -354,7 +278,7 @@ const unsubscribe = firekitAuth.onAuthStateChanged((user) => {
 	}
 });
 
-// Clean up listener
+// Clean up listener when component unmounts
 unsubscribe();
 ```
 
@@ -370,53 +294,6 @@ const token = await firekitAuth.getIdToken();
 
 // Force refresh token
 const freshToken = await firekitAuth.getIdToken(true);
-```
-
-### Get Access Token
-
-```typescript
-import { firekitAuth } from 'svelte-firekit';
-
-// Get access token for specific provider
-const accessToken = await firekitAuth.getAccessToken('google');
-```
-
-### Token Refresh
-
-```typescript
-import { firekitAuth } from 'svelte-firekit';
-
-// Refresh tokens
-await firekitAuth.refreshTokens();
-```
-
-## Extended User Data
-
-### User Profile
-
-```typescript
-import { firekitAuth } from 'svelte-firekit';
-
-// Get user profile
-const profile = firekitAuth.currentUser?.profile;
-
-// Extended user data
-const extendedUser = firekitAuth.currentUser?.extended;
-```
-
-### User Metadata
-
-```typescript
-import { firekitAuth } from 'svelte-firekit';
-
-// Get user metadata
-const metadata = firekitAuth.currentUser?.metadata;
-
-// Check creation time
-const createdAt = metadata?.creationTime;
-
-// Check last sign in
-const lastSignIn = metadata?.lastSignInTime;
 ```
 
 ## Error Handling
@@ -455,21 +332,6 @@ Common authentication error codes:
 
 ## Svelte Component Integration
 
-### Authentication Guard Component
-
-```svelte
-<script>
-	import { firekitUser } from 'svelte-firekit';
-	import { AuthGuard } from 'svelte-firekit';
-
-	const isAuthenticated = $derived(firekitUser.isAuthenticated);
-</script>
-
-<AuthGuard fallback="/login">
-	<slot />
-</AuthGuard>
-```
-
 ### Sign In Component
 
 ```svelte
@@ -478,10 +340,10 @@ Common authentication error codes:
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 
-	let email = '';
-	let password = '';
-	let loading = false;
-	let error = '';
+	let email = $state('');
+	let password = $state('');
+	let loading = $state(false);
+	let error = $state('');
 
 	async function handleSignIn() {
 		loading = true;
@@ -498,8 +360,8 @@ Common authentication error codes:
 </script>
 
 <form onsubmit|preventDefault={handleSignIn} class="space-y-4">
-	<Input type="email" bindvalue={email} placeholder="Email" required />
-	<Input type="password" bindvalue={password} placeholder="Password" required />
+	<Input type="email" bind:value={email} placeholder="Email" required />
+	<Input type="password" bind:value={password} placeholder="Password" required />
 
 	{#if error}
 		<p class="text-red-500">{error}</p>
@@ -520,8 +382,15 @@ Common authentication error codes:
 	import { Input } from '$lib/components/ui/input';
 
 	const user = $derived(firekitUser.user);
-	let displayName = user?.displayName || '';
-	let loading = false;
+	let displayName = $state(user?.displayName || '');
+	let loading = $state(false);
+
+	// Sync displayName with user data - use $effect for state updates
+	$effect(() => {
+		if (user?.displayName && displayName !== user.displayName) {
+			displayName = user.displayName;
+		}
+	});
 
 	async function updateProfile() {
 		loading = true;
@@ -549,7 +418,7 @@ Common authentication error codes:
 
 	<div>
 		<label>Display Name</label>
-		<Input bindvalue={displayName} />
+		<Input bind:value={displayName} />
 	</div>
 
 	<Button onclick={updateProfile} disabled={loading}>
@@ -559,8 +428,6 @@ Common authentication error codes:
 ```
 
 ## Type Definitions
-
-### User Interface
 
 ```typescript
 interface User {
@@ -573,53 +440,11 @@ interface User {
 	isAnonymous: boolean;
 	metadata: UserMetadata;
 	providerData: UserInfo[];
-	profile?: UserProfile;
-	extended?: ExtendedUserData;
 }
 
 interface UserMetadata {
 	creationTime: string;
 	lastSignInTime: string;
-	lastRefreshTime: string;
-}
-
-interface UserProfile {
-	firstName?: string;
-	lastName?: string;
-	birthDate?: string;
-	location?: string;
-	bio?: string;
-}
-
-interface ExtendedUserData {
-	preferences?: Record<string, any>;
-	settings?: Record<string, any>;
-	subscription?: {
-		plan: string;
-		status: string;
-		expiresAt: string;
-	};
-}
-```
-
-### Authentication Options
-
-```typescript
-interface AuthOptions {
-	persistence?: 'local' | 'session' | 'none';
-	languageCode?: string;
-	timeout?: number;
-}
-
-interface SignInOptions {
-	displayName?: string;
-	photoURL?: string;
-	phoneNumber?: string;
-}
-
-interface ProviderOptions {
-	scopes?: string[];
-	customParameters?: Record<string, string>;
 }
 ```
 
@@ -629,61 +454,90 @@ interface ProviderOptions {
 
 1. **Always validate user input** before authentication
 2. **Use strong password requirements** for email/password auth
-3. **Implement rate limiting** for authentication attempts
-4. **Enable email verification** for sensitive applications
-5. **Use HTTPS** in production environments
+3. **Enable email verification** for sensitive applications
+4. **Use HTTPS** in production environments
 
 ### User Experience
 
-1. **Show loading states** during authentication
+1. **Show loading states** during authentication using `$state`
 2. **Provide clear error messages** for failed attempts
-3. **Implement progressive enhancement** for offline scenarios
-4. **Use persistent authentication** for better UX
-5. **Handle edge cases** like network errors gracefully
+3. **Use reactive state** with `$derived` for real-time updates
+4. **Handle edge cases** like network errors gracefully
 
-### Performance
+### Performance & Reactivity
 
-1. **Lazy load authentication providers** when needed
-2. **Cache user data** to reduce API calls
-3. **Use reactive state** for real-time updates
+1. **Use `$derived` for computed values** - they automatically update when dependencies change
+2. **Use `$effect` only for side effects** - DOM updates, API calls, logging, etc.
+3. **Avoid unnecessary `$effect` calls** - prefer `$derived` for simple transformations
 4. **Implement proper cleanup** for listeners and subscriptions
+
+#### ✅ Good Patterns
+
+```svelte
+<script>
+	const user = $derived(firekitUser.user);
+	
+	// ✅ Use $derived for computations
+	const isAdmin = $derived(user?.email?.endsWith('@admin.com') || false);
+	const displayName = $derived(user?.displayName || 'Anonymous');
+	
+	// ✅ Use $effect for side effects only
+	$effect(() => {
+		if (user) {
+			analytics.identify(user.uid);
+		}
+	});
+</script>
+```
+
+#### ❌ Bad Patterns
+
+```svelte
+<script>
+	const user = $derived(firekitUser.user);
+	let isAdmin = $state(false);
+	let displayName = $state('');
+	
+	// ❌ Don't use $effect for simple computations
+	$effect(() => {
+		isAdmin = user?.email?.endsWith('@admin.com') || false;
+		displayName = user?.displayName || 'Anonymous';
+	});
+</script>
+```
 
 ## API Reference
 
 ### Core Methods
 
-- `signInWithEmail(email, password, displayName?)` - Email/password sign in
-- `registerWithEmail(email, password, displayName?, profile?)` - User registration
+- `signInWithEmail(email, password)` - Email/password sign in
+- `registerWithEmail(email, password)` - User registration
 - `signInWithGoogle()` - Google sign in
 - `signInWithFacebook()` - Facebook sign in
 - `signInWithApple()` - Apple sign in
-- `signInWithPhone(phoneNumber)` - Phone number sign in
+- `signInWithPhoneNumber(phoneNumber, verifier)` - Phone number sign in
 - `signInAnonymously()` - Anonymous sign in
-- `signInWithProvider(provider, options?)` - Custom provider sign in
 - `signOut()` - Sign out current user
 
 ### Profile Management
 
 - `updateProfile(updates)` - Update user profile
-- `updateEmail(email, password?)` - Update email address
-- `updatePassword(password, currentPassword?)` - Update password
-- `deleteAccount(password?)` - Delete user account
+- `updateEmail(email)` - Update email address
+- `updatePassword(password)` - Update password
+- `deleteUser()` - Delete user account
 
 ### Email Operations
 
-- `sendEmailVerification(options?)` - Send verification email
-- `sendPasswordResetEmail(email, options?)` - Send reset email
+- `sendEmailVerification()` - Send verification email
+- `sendPasswordResetEmail(email)` - Send reset email
 - `confirmPasswordReset(code, newPassword)` - Confirm password reset
 
 ### Token Management
 
 - `getIdToken(forceRefresh?)` - Get ID token
-- `getAccessToken(provider)` - Get provider access token
-- `refreshTokens()` - Refresh all tokens
 
 ### State Management
 
 - `onAuthStateChanged(callback)` - Listen to auth state changes
 - `reloadUser()` - Reload user data
 - `get currentUser()` - Get current user
-- `get isAuthenticated()` - Check authentication status

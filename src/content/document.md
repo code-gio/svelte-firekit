@@ -1010,6 +1010,208 @@ onDestroy(() => {
 });
 ```
 
+## Promise-Based Usage
+
+In addition to reactive state, documents provide Promise-based methods for imperative access patterns.
+
+### Fetching Fresh Data from Server
+
+```typescript
+import { firekitDoc } from 'svelte-firekit';
+
+const userDoc = firekitDoc<User>('users/123');
+
+// Get fresh data directly from server (bypasses cache)
+async function fetchLatestUser() {
+	try {
+		const freshData = await userDoc.getFromServer();
+		console.log('Fresh user data from server:', freshData);
+		return freshData;
+	} catch (error) {
+		console.error('Failed to fetch user:', error);
+		throw error;
+	}
+}
+
+// Refresh document and wait for completion
+async function refreshDocument() {
+	try {
+		await userDoc.refresh();
+		console.log('Document refreshed successfully');
+	} catch (error) {
+		console.error('Failed to refresh document:', error);
+		throw error;
+	}
+}
+```
+
+### Using with Async/Await Patterns
+
+```typescript
+import { firekitDoc } from 'svelte-firekit';
+
+// Create document
+const postDoc = firekitDoc<Post>('posts/456');
+
+// Function that ensures document is loaded
+async function processPost() {
+	console.log('Ensuring post is loaded...');
+	
+	// Get current data or fetch if not available
+	const postData = await postDoc.getFromServer();
+	console.log('Post data:', postData);
+	
+	if (!postData) {
+		throw new Error('Post not found');
+	}
+	
+	// Process the data
+	return {
+		...postData,
+		processed: true,
+		processedAt: new Date(),
+		wordCount: postData.content.split(' ').length
+	};
+}
+
+// Use in async context
+async function handlePostAction() {
+	try {
+		const processedPost = await processPost();
+		console.log('Processed post:', processedPost);
+	} catch (error) {
+		console.error('Error processing post:', error);
+	}
+}
+```
+
+### Combining Reactive and Promise Patterns
+
+```typescript
+import { firekitDoc } from 'svelte-firekit';
+
+const userDoc = firekitDoc<User>('users/123');
+
+// Reactive state for UI
+const userData = $derived(userDoc.data);
+const userLoading = $derived(userDoc.loading);
+const userError = $derived(userDoc.error);
+const userExists = $derived(userDoc.exists);
+
+// Promise-based methods for specific operations
+async function refreshUser() {
+	try {
+		// Force refresh from server
+		await userDoc.refresh();
+		console.log('User refreshed');
+	} catch (error) {
+		console.error('Refresh failed:', error);
+		throw error;
+	}
+}
+
+async function getLatestUserData() {
+	try {
+		const latestData = await userDoc.getFromServer();
+		console.log('Latest user data:', latestData);
+		return latestData;
+	} catch (error) {
+		console.error('Failed to get latest data:', error);
+		throw error;
+	}
+}
+
+// React to state changes while using Promise methods
+$effect(() => {
+	if (userError?.isRetryable()) {
+		console.log('Attempting to recover from error...');
+		refreshUser().catch(err => {
+			console.error('Recovery failed:', err);
+		});
+	}
+});
+```
+
+### Server-Side Rendering (SSR) Support
+
+```typescript
+import { firekitDoc } from 'svelte-firekit';
+
+// Load document data for SSR
+export async function load({ params }) {
+	const userDoc = firekitDoc<User>(`users/${params.id}`);
+	
+	try {
+		// Get data from server for SSR
+		const userData = await userDoc.getFromServer();
+		
+		return {
+			user: userData
+		};
+	} catch (error) {
+		console.error('SSR load failed:', error);
+		return {
+			user: null
+		};
+	}
+}
+```
+
+### Advanced Promise Usage
+
+```typescript
+import { firekitDoc } from 'svelte-firekit';
+
+const articleDoc = firekitDoc<Article>('articles/789');
+
+// Wait for document to be ready with timeout
+async function waitForArticle(timeout = 5000) {
+	return new Promise<Article | null>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			reject(new Error('Timeout waiting for article'));
+		}, timeout);
+		
+		// Check if already available
+		if (!articleDoc.loading && articleDoc.data) {
+			clearTimeout(timer);
+			resolve(articleDoc.data);
+			return;
+		}
+		
+		// Watch for state changes
+		const unsubscribe = $effect.root(() => {
+			$effect(() => {
+				if (!articleDoc.loading) {
+					clearTimeout(timer);
+					unsubscribe();
+					resolve(articleDoc.data);
+				}
+			});
+		});
+	});
+}
+
+// Use with retry logic
+async function getArticleWithRetry(maxRetries = 3) {
+	let retries = 0;
+	
+	while (retries < maxRetries) {
+		try {
+			const article = await articleDoc.getFromServer();
+			return article;
+		} catch (error) {
+			retries++;
+			if (retries >= maxRetries) {
+				throw error;
+			}
+			
+			// Wait before retry
+			await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+		}
+	}
+}
+```
+
 ## API Reference
 
 ### Properties
@@ -1028,8 +1230,8 @@ onDestroy(() => {
 
 ### Methods
 
-- `refresh()` - Refresh document data
-- `getFromServer()` - Fetch data from server
+- `refresh(): Promise<void>` - Refresh document data and wait for completion
+- `getFromServer(): Promise<T | null>` - Fetch fresh data from server (bypasses cache)
 - `retryIfNeeded()` - Retry operation if needed
 - `ensureReady()` - Ensure document is ready
 - `setRealtimeMode(realtime)` - Toggle real-time mode

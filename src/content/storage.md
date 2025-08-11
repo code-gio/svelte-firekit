@@ -866,6 +866,314 @@ interface FileMetadata {
    });
    ```
 
+## Promise-Based Usage
+
+Storage services provide Promise-based methods for imperative file operations.
+
+### Refreshing Storage Components
+
+```typescript
+import { firekitDownloadUrl, firekitStorageList } from 'svelte-firekit';
+
+// Download URL refresh
+const imageUrl = firekitDownloadUrl('images/profile.jpg');
+
+// Refresh download URL (returns void but triggers reactive update)
+async function refreshImageUrl() {
+	try {
+		imageUrl.refresh(); // Note: This returns void but updates reactive state
+		console.log('Download URL refresh initiated');
+		
+		// Wait for the refresh to complete by watching loading state
+		await new Promise<void>((resolve) => {
+			const unsubscribe = $effect.root(() => {
+				$effect(() => {
+					if (!imageUrl.loading && imageUrl.url) {
+						unsubscribe();
+						resolve();
+					}
+				});
+			});
+		});
+		
+		console.log('Download URL refreshed:', imageUrl.url);
+	} catch (error) {
+		console.error('Failed to refresh URL:', error);
+	}
+}
+
+// Storage list refresh
+const filesList = firekitStorageList('documents/');
+
+// Refresh file list (returns void but triggers reactive update)
+async function refreshFilesList() {
+	try {
+		filesList.refresh(); // Note: This returns void but updates reactive state
+		console.log('File list refresh initiated');
+		
+		// Wait for the refresh to complete by watching loading state
+		await new Promise<void>((resolve) => {
+			const unsubscribe = $effect.root(() => {
+				$effect(() => {
+					if (!filesList.loading) {
+						unsubscribe();
+						resolve();
+					}
+				});
+			});
+		});
+		
+		console.log('File list refreshed:', filesList.items.length, 'files');
+	} catch (error) {
+		console.error('Failed to refresh files list:', error);
+	}
+}
+```
+
+### Upload Task Promise Patterns
+
+```typescript
+import { firekitUploadTask } from 'svelte-firekit';
+
+// Create upload task
+const uploadTask = firekitUploadTask('documents/report.pdf', file);
+
+// Wait for upload completion using reactive state
+async function waitForUploadCompletion(): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const unsubscribe = $effect.root(() => {
+			$effect(() => {
+				if (uploadTask.completed && uploadTask.downloadURL) {
+					unsubscribe();
+					resolve(uploadTask.downloadURL);
+				} else if (uploadTask.error) {
+					unsubscribe();
+					reject(uploadTask.error);
+				}
+			});
+		});
+	});
+}
+
+// Use upload with async/await
+async function handleFileUpload(file: File) {
+	try {
+		const upload = firekitUploadTask(`uploads/${Date.now()}_${file.name}`, file);
+		
+		// Wait for completion
+		const downloadURL = await waitForUploadCompletion();
+		console.log('Upload completed:', downloadURL);
+		
+		return downloadURL;
+	} catch (error) {
+		console.error('Upload failed:', error);
+		throw error;
+	}
+}
+```
+
+### Download URL with Promise Patterns
+
+```typescript
+import { firekitDownloadUrl } from 'svelte-firekit';
+
+// Create download URL instance
+const fileUrl = firekitDownloadUrl('documents/important.pdf');
+
+// Wait for URL to be available
+async function waitForDownloadUrl(): Promise<string> {
+	return new Promise((resolve, reject) => {
+		// Check if already available
+		if (fileUrl.url && !fileUrl.loading) {
+			resolve(fileUrl.url);
+			return;
+		}
+		
+		// Wait for URL to load
+		const unsubscribe = $effect.root(() => {
+			$effect(() => {
+				if (fileUrl.url && !fileUrl.loading) {
+					unsubscribe();
+					resolve(fileUrl.url);
+				} else if (fileUrl.error) {
+					unsubscribe();
+					reject(fileUrl.error);
+				}
+			});
+		});
+	});
+}
+
+// Download file content using Promise pattern
+async function downloadFileContent(path: string): Promise<Blob> {
+	const downloadUrl = firekitDownloadUrl(path);
+	
+	try {
+		// Wait for URL to be available
+		const url = await waitForDownloadUrl();
+		
+		// Fetch the file content
+		const response = await fetch(url);
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+		
+		return await response.blob();
+	} catch (error) {
+		console.error('Failed to download file content:', error);
+		throw error;
+	}
+}
+```
+
+### Storage List Promise Patterns
+
+```typescript
+import { firekitStorageList } from 'svelte-firekit';
+
+// Create storage list instance
+const storageList = firekitStorageList('images/');
+
+// Wait for files to load
+async function waitForFilesList(): Promise<StorageReference[]> {
+	return new Promise((resolve, reject) => {
+		// Check if already loaded
+		if (!storageList.loading && storageList.items.length >= 0) {
+			resolve(storageList.items);
+			return;
+		}
+		
+		// Wait for loading to complete
+		const unsubscribe = $effect.root(() => {
+			$effect(() => {
+				if (!storageList.loading) {
+					unsubscribe();
+					if (storageList.error) {
+						reject(storageList.error);
+					} else {
+						resolve(storageList.items);
+					}
+				}
+			});
+		});
+	});
+}
+
+// Get file list with Promise pattern
+async function getFilesList(directory: string): Promise<StorageReference[]> {
+	const list = firekitStorageList(directory);
+	
+	try {
+		const files = await waitForFilesList();
+		console.log(`Found ${files.length} files in ${directory}`);
+		return files;
+	} catch (error) {
+		console.error('Failed to get files list:', error);
+		throw error;
+	}
+}
+```
+
+### Combining Reactive and Promise Patterns
+
+```typescript
+import { firekitUploadTask, firekitDownloadUrl, firekitStorageList } from 'svelte-firekit';
+
+// File manager with both reactive and promise-based operations
+class FileManager {
+	private uploadTasks: any[] = [];
+	private storageList = firekitStorageList('uploads/');
+	
+	// Reactive state for UI
+	get files() {
+		return this.storageList.items;
+	}
+	
+	get loading() {
+		return this.storageList.loading;
+	}
+	
+	// Promise-based operations
+	async uploadFile(file: File): Promise<string> {
+		const upload = firekitUploadTask(`uploads/${Date.now()}_${file.name}`, file);
+		this.uploadTasks.push(upload);
+		
+		// Wait for completion
+		const downloadURL = await this.waitForUpload(upload);
+		
+		// Refresh file list after upload
+		this.storageList.refresh();
+		
+		return downloadURL;
+	}
+	
+	private async waitForUpload(upload: any): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const unsubscribe = $effect.root(() => {
+				$effect(() => {
+					if (upload.completed && upload.downloadURL) {
+						unsubscribe();
+						resolve(upload.downloadURL);
+					} else if (upload.error) {
+						unsubscribe();
+						reject(upload.error);
+					}
+				});
+			});
+		});
+	}
+	
+	async downloadFile(path: string): Promise<Blob> {
+		const downloadUrl = firekitDownloadUrl(path);
+		
+		// Wait for URL
+		const url = await this.waitForUrl(downloadUrl);
+		
+		// Fetch content
+		const response = await fetch(url);
+		return await response.blob();
+	}
+	
+	private async waitForUrl(downloadUrl: any): Promise<string> {
+		return new Promise((resolve, reject) => {
+			if (downloadUrl.url && !downloadUrl.loading) {
+				resolve(downloadUrl.url);
+				return;
+			}
+			
+			const unsubscribe = $effect.root(() => {
+				$effect(() => {
+					if (downloadUrl.url && !downloadUrl.loading) {
+						unsubscribe();
+						resolve(downloadUrl.url);
+					} else if (downloadUrl.error) {
+						unsubscribe();
+						reject(downloadUrl.error);
+					}
+				});
+			});
+		});
+	}
+}
+
+// Usage
+const fileManager = new FileManager();
+
+// Upload with Promise
+async function handleUpload(file: File) {
+	try {
+		const downloadURL = await fileManager.uploadFile(file);
+		console.log('File uploaded:', downloadURL);
+	} catch (error) {
+		console.error('Upload failed:', error);
+	}
+}
+
+// Access reactive state
+const files = $derived(fileManager.files);
+const loading = $derived(fileManager.loading);
+```
+
 ## API Reference
 
 ### Core Methods
@@ -879,21 +1187,14 @@ interface FileMetadata {
 - `upload.pause()` - Pause upload
 - `upload.resume()` - Resume upload
 - `upload.cancel()` - Cancel upload
-- `upload.complete()` - Wait for completion
 
 ### Download URL Methods
 
-- `downloadUrl.refresh()` - Refresh download URL
-- `downloadUrl.revoke()` - Revoke download URL
+- `downloadUrl.refresh(): void` - Refresh download URL (triggers reactive update)
 
 ### Storage List Methods
 
-- `storageList.loadMore()` - Load more files
-- `storageList.refresh()` - Refresh file list
-- `storageList.deleteFile(path)` - Delete single file
-- `storageList.deleteFiles(paths)` - Delete multiple files
-- `storageList.getFileMetadata(path)` - Get file metadata
-- `storageList.updateFileMetadata(path, metadata)` - Update file metadata
+- `storageList.refresh(): void` - Refresh file list (triggers reactive update)
 
 ### Properties
 

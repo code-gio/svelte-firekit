@@ -192,69 +192,57 @@ const techResults = firekitCollection<Post>('posts', techPosts.build());
 const designResults = firekitCollection<Post>('posts', designPosts.build());
 ```
 
-## Pagination
+## Data Manipulation
 
-### Basic Pagination
+### Pagination
 
 ```typescript
 import { firekitCollection } from 'svelte-firekit';
 
-// Collection with pagination enabled
-const paginatedUsers = firekitCollection<User>('users', {
-	pagination: {
-		enabled: true,
-		pageSize: 20
-	}
-});
+const users = firekitCollection<User>('users');
 
-// Access pagination methods
-const currentPage = $derived(paginatedUsers.currentPage);
-const totalPages = $derived(paginatedUsers.totalPages);
-const hasNextPage = $derived(paginatedUsers.hasNextPage);
-const hasPreviousPage = $derived(paginatedUsers.hasPreviousPage);
+// Get paginated subset of documents
+const page1 = $derived(users.paginate(1, 10)); // First 10 users
+const page2 = $derived(users.paginate(2, 10)); // Next 10 users
 
-// Pagination functions
-async function loadNextPage() {
-	await paginatedUsers.nextPage();
+// Calculate pagination info
+const totalCount = $derived(users.count());
+const pageSize = 10;
+const totalPages = $derived(Math.ceil(totalCount / pageSize));
+const currentPage = $state(1);
+
+function goToPage(page: number) {
+	currentPage = page;
 }
 
-async function loadPreviousPage() {
-	await paginatedUsers.previousPage();
-}
-
-async function goToPage(page: number) {
-	await paginatedUsers.goToPage(page);
-}
+const currentPageData = $derived(users.paginate(currentPage, pageSize));
+const hasNextPage = $derived(currentPage < totalPages);
+const hasPreviousPage = $derived(currentPage > 1);
 ```
 
-### Infinite Scrolling
+### Filtering and Sorting
 
 ```typescript
 import { firekitCollection } from 'svelte-firekit';
 
-// Collection with infinite scrolling
-const infinitePosts = firekitCollection<Post>('posts', {
-	pagination: {
-		enabled: true,
-		pageSize: 10,
-		mode: 'infinite'
-	},
-	orderBy: 'createdAt',
-	direction: 'desc'
-});
+const posts = firekitCollection<Post>('posts');
 
-// Load more data
-async function loadMorePosts() {
-	if (infinitePosts.hasNextPage) {
-		await infinitePosts.loadMore();
-	}
-}
+// Filter documents by predicate
+const publishedPosts = $derived(posts.filter(post => post.published));
+const featuredPosts = $derived(posts.filter(post => post.featured));
 
-// React to data changes
-$effect(() => {
-	console.log('Total posts loaded:', infinitePosts.data.length);
-	console.log('Has more posts:', infinitePosts.hasNextPage);
-});
+// Sort documents
+const sortedByDate = $derived(posts.sort((a, b) => 
+	new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+));
+
+// Find specific document
+const specificPost = $derived(posts.findById('post-123'));
+const firstFeatured = $derived(posts.find(post => post.featured));
+
+// Count documents
+const totalPosts = $derived(posts.count());
+const publishedCount = $derived(posts.count(post => post.published));
 ```
 
 ## Caching
@@ -1076,6 +1064,156 @@ onDestroy(() => {
 });
 ```
 
+## Promise-Based Usage
+
+In addition to reactive state, collections provide Promise-based methods for imperative access patterns.
+
+### Fetching Fresh Data
+
+```typescript
+import { firekitCollection } from 'svelte-firekit';
+
+const posts = firekitCollection<Post>('posts');
+
+// Get fresh data from server (bypasses cache)
+async function fetchLatestPosts() {
+	try {
+		const freshData = await posts.getFromServer();
+		console.log('Fresh posts from server:', freshData);
+		return freshData;
+	} catch (error) {
+		console.error('Failed to fetch posts:', error);
+		throw error;
+	}
+}
+
+// Wait for collection to initialize
+async function ensurePostsLoaded() {
+	try {
+		const initialData = await posts.waitForInitialization();
+		console.log('Posts initialized with:', initialData.length, 'items');
+		return initialData;
+	} catch (error) {
+		console.error('Failed to initialize posts:', error);
+		throw error;
+	}
+}
+```
+
+### Using with Async/Await Patterns
+
+```typescript
+import { firekitCollection, where, orderBy, limit } from 'svelte-firekit';
+
+// Create collection
+const users = firekitCollection<User>(
+	'users',
+	where('active', '==', true),
+	orderBy('createdAt', 'desc'),
+	limit(10)
+);
+
+// Function that waits for data
+async function processUsers() {
+	console.log('Waiting for users to load...');
+	
+	// Wait for initial load
+	const initialUsers = await users.waitForInitialization();
+	console.log('Initial users loaded:', initialUsers.length);
+	
+	// Get fresh data from server
+	const freshUsers = await users.getFromServer();
+	console.log('Fresh users from server:', freshUsers.length);
+	
+	// Process the data
+	return freshUsers.map(user => ({
+		...user,
+		processed: true,
+		processedAt: new Date()
+	}));
+}
+
+// Use in async context
+async function handleUserAction() {
+	try {
+		const processedUsers = await processUsers();
+		console.log('Processed users:', processedUsers);
+	} catch (error) {
+		console.error('Error processing users:', error);
+	}
+}
+```
+
+### Combining Reactive and Promise Patterns
+
+```typescript
+import { firekitCollection } from 'svelte-firekit';
+
+const posts = firekitCollection<Post>('posts');
+
+// Reactive state for UI
+const postsData = $derived(posts.data);
+const postsLoading = $derived(posts.loading);
+const postsError = $derived(posts.error);
+
+// Promise-based methods for specific operations
+async function refreshPosts() {
+	try {
+		// Force refresh from server
+		const freshData = await posts.getFromServer();
+		console.log('Refreshed posts:', freshData.length);
+		return freshData;
+	} catch (error) {
+		console.error('Refresh failed:', error);
+		throw error;
+	}
+}
+
+async function waitForPosts() {
+	if (!posts.initialized) {
+		const initialData = await posts.waitForInitialization();
+		console.log('Posts ready:', initialData.length);
+		return initialData;
+	}
+	return posts.data;
+}
+
+// React to state changes while using Promise methods
+$effect(() => {
+	if (postsError) {
+		console.log('Attempting to recover from error...');
+		refreshPosts().catch(err => {
+			console.error('Recovery failed:', err);
+		});
+	}
+});
+```
+
+### Server-Side Rendering (SSR) Support
+
+```typescript
+import { firekitCollection } from 'svelte-firekit';
+
+// Load data for SSR
+export async function load() {
+	const posts = firekitCollection<Post>('posts');
+	
+	try {
+		// Wait for data to be available
+		const postsData = await posts.waitForInitialization();
+		
+		return {
+			posts: postsData
+		};
+	} catch (error) {
+		console.error('SSR load failed:', error);
+		return {
+			posts: []
+		};
+	}
+}
+```
+
 ## API Reference
 
 ### Properties
@@ -1095,7 +1233,8 @@ onDestroy(() => {
 ### Methods
 
 - `refresh()` - Refresh collection data
-- `getFromServer()` - Fetch data from server
+- `getFromServer(): Promise<T[]>` - Fetch fresh data from server (bypasses cache)
+- `waitForInitialization(): Promise<T[]>` - Wait for collection to initialize and return data
 - `addConstraints(...constraints)` - Add query constraints
 - `createQuery()` - Create query builder
 - `withQuery(builder)` - Use query builder
@@ -1113,7 +1252,6 @@ onDestroy(() => {
 - `clearCache()` - Clear cache
 - `getStats()` - Get performance statistics
 - `resetStats()` - Reset statistics
-- `waitForInitialization()` - Wait for initialization
 - `dispose()` - Clean up resources
 
 ### Pagination Methods
