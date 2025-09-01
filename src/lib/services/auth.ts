@@ -54,6 +54,7 @@ import {
 	createAppleProvider,
 	handleAuthError
 } from '../utils/index.js';
+import { firekitPresence } from './presence.svelte.js';
 
 /**
  * Comprehensive Firebase Authentication service for Svelte applications.
@@ -971,6 +972,15 @@ class FirekitAuth {
 		}
 
 		try {
+			// Set presence offline before signing out
+			try {
+				if (firekitPresence.initialized) {
+					await firekitPresence.setPresence('offline');
+				}
+			} catch (presenceError) {
+				console.warn('Failed to set presence offline during sign out:', presenceError);
+			}
+
 			// Clear reCAPTCHA verifiers
 			this.recaptchaVerifiers.forEach((verifier) => verifier.clear());
 			this.recaptchaVerifiers.clear();
