@@ -1,303 +1,195 @@
-/**
- * @fileoverview FirekitPresence - Clean presence tracking for Svelte applications
- * @module FirekitPresence
- * @version 1.0.0
- */
-
-import { ref, onValue, onDisconnect, set, get, serverTimestamp } from 'firebase/database';
-import { firebaseService } from '../firebase.js';
-import { browser } from '$app/environment';
 import {
-	type GeolocationConfig,
+	ref,
+	onValue,
+	onDisconnect,
+	set,
+	get,
+	serverTimestamp
+} from 'firebase/database';
+import { firebaseService } from '../firebase.js';
+import {
 	type PresenceConfig,
-	type Location,
-	type DeviceInfo,
 	type SessionData,
 	type PresenceStats,
+	type GeolocationConfig,
+	type Location,
+	type DeviceInfo,
 	PresenceErrorCode,
 	PresenceError
 } from '../types/presence.js';
 
-/**
- * Handles geolocation tracking
- */
+// ── Geolocation helper ────────────────────────────────────────────────────────
+
 class GeolocationService {
-	private config: GeolocationConfig;
-	private watchId: number | null = null;
+	private _config: GeolocationConfig;
+	private _watchId: number | null = null;
 	private _hasConsent = $state(false);
 	private _location = $state<Location | null>(null);
-	private _error = $state<Error | null>(null);
 
 	constructor(config: GeolocationConfig) {
-		this.config = config;
+		this._config = config;
 	}
 
-	get hasConsent(): boolean {
-		return this._hasConsent;
-	}
+	get hasConsent(): boolean { return this._hasConsent; }
+	get location(): Location | null { return this._location; }
 
-	get location(): Location | null {
-		return this._location;
-	}
-
-	get error(): Error | null {
-		return this._error;
-	}
-
-	/**
-	 * Request user consent for location tracking
-	 */
 	async requestConsent(): Promise<boolean> {
-		if (!this.config.enabled || !browser) return false;
+		if (!this._config.enabled || typeof window === 'undefined') return false;
+		if (this._config.type !== 'browser') { this._hasConsent = true; return true; }
 
-		try {
-			if (this.config.type === 'browser') {
-				const success = await new Promise<boolean>((resolve) => {
-					navigator.geolocation.getCurrentPosition(
-						() => resolve(true),
-						() => resolve(false),
-						{
-							timeout: this.config.timeout || 10000,
-							enableHighAccuracy: this.config.enableHighAccuracy || false
-						}
-					);
-				});
-
-				this._hasConsent = success;
-				return success;
-			}
-
-			this._hasConsent = true;
-			return true;
-		} catch (error) {
-			this._error = error as Error;
-			return false;
-		}
+		return new Promise<boolean>((resolve) => {
+			navigator.geolocation.getCurrentPosition(
+				() => { this._hasConsent = true; resolve(true); },
+				() => resolve(false),
+				{ timeout: this._config.timeout ?? 10_000, enableHighAccuracy: this._config.enableHighAccuracy ?? false }
+			);
+		});
 	}
 
-	/**
-	 * Get current location
-	 */
 	async getCurrentLocation(): Promise<Location | null> {
-		if (!this.config.enabled || (this.config.requireConsent && !this._hasConsent)) {
-			return null;
-		}
+		if (!this._config.enabled) return null;
+		if (this._config.requireConsent && !this._hasConsent) return null;
 
-		try {
-			switch (this.config.type) {
-				case 'browser':
-					return this.getBrowserLocation();
-
-				case 'ip':
-					return this.getIPLocation();
-
-				case 'custom':
-					return this.getCustomLocation();
-
-				default:
-					return null;
-			}
-		} catch (error) {
-			this._error = error as Error;
-			return null;
+		switch (this._config.type) {
+			case 'browser': return this._getBrowserLocation();
+			case 'ip': return this._getIPLocation();
+			case 'custom': return this._getCustomLocation();
+			default: return null;
 		}
 	}
 
-	/**
-	 * Start watching location changes
-	 */
-	startWatching(updateInterval: number): void {
-		if (!this.config.enabled || this.watchId) return;
-
-		const watchLocation = async () => {
-			const location = await this.getCurrentLocation();
-			if (location) {
-				this._location = location;
-			}
+	startWatching(intervalMs: number): void {
+		if (!this._config.enabled || this._watchId) return;
+		const tick = async () => {
+			const loc = await this.getCurrentLocation();
+			if (loc) this._location = loc;
 		};
-
-		watchLocation();
-		this.watchId = window.setInterval(watchLocation, updateInterval);
+		tick();
+		this._watchId = window.setInterval(tick, intervalMs);
 	}
 
-	/**
-	 * Stop watching location changes
-	 */
 	stopWatching(): void {
-		if (this.watchId) {
-			clearInterval(this.watchId);
-			this.watchId = null;
+		if (this._watchId !== null) {
+			clearInterval(this._watchId);
+			this._watchId = null;
 		}
 	}
 
-	private async getBrowserLocation(): Promise<Location | null> {
+	private _getBrowserLocation(): Promise<Location | null> {
 		return new Promise((resolve) => {
 			navigator.geolocation.getCurrentPosition(
-				(position) => {
-					resolve({
-						latitude: position.coords.latitude,
-						longitude: position.coords.longitude,
-						accuracy: position.coords.accuracy,
-						altitude: position.coords.altitude || undefined,
-						altitudeAccuracy: position.coords.altitudeAccuracy || undefined,
-						heading: position.coords.heading || undefined,
-						speed: position.coords.speed || undefined,
-						lastUpdated: new Date().toISOString(),
-						source: 'browser'
-					});
-				},
+				(pos) => resolve({
+					latitude: pos.coords.latitude,
+					longitude: pos.coords.longitude,
+					accuracy: pos.coords.accuracy,
+					altitude: pos.coords.altitude ?? undefined,
+					altitudeAccuracy: pos.coords.altitudeAccuracy ?? undefined,
+					heading: pos.coords.heading ?? undefined,
+					speed: pos.coords.speed ?? undefined,
+					lastUpdated: new Date().toISOString(),
+					source: 'browser'
+				}),
 				() => resolve(null),
 				{
-					timeout: this.config.timeout || 10000,
-					enableHighAccuracy: this.config.enableHighAccuracy || false,
-					maximumAge: this.config.maximumAge || 300000
+					timeout: this._config.timeout ?? 10_000,
+					enableHighAccuracy: this._config.enableHighAccuracy ?? false,
+					maximumAge: this._config.maximumAge ?? 300_000
 				}
 			);
 		});
 	}
 
-	private async getIPLocation(): Promise<Location | null> {
-		if (!this.config.ipServiceUrl) return null;
-
+	private async _getIPLocation(): Promise<Location | null> {
+		if (!this._config.ipServiceUrl) return null;
 		try {
-			const response = await fetch(this.config.ipServiceUrl);
-			const data = await response.json();
-
+			const res = await fetch(this._config.ipServiceUrl);
+			const data = await res.json() as { latitude: number; longitude: number; accuracy?: number };
 			return {
 				latitude: data.latitude,
 				longitude: data.longitude,
-				accuracy: data.accuracy || undefined,
+				accuracy: data.accuracy,
 				lastUpdated: new Date().toISOString(),
 				source: 'ip'
 			};
-		} catch {
-			return null;
-		}
+		} catch { return null; }
 	}
 
-	private async getCustomLocation(): Promise<Location | null> {
-		if (!this.config.customGeolocationFn) return null;
-
+	private async _getCustomLocation(): Promise<Location | null> {
+		if (!this._config.customGeolocationFn) return null;
 		try {
-			const result = await this.config.customGeolocationFn();
-			return {
-				...result,
-				lastUpdated: new Date().toISOString(),
-				source: 'custom'
-			};
-		} catch {
-			return null;
-		}
+			const result = await this._config.customGeolocationFn();
+			return { ...result, lastUpdated: new Date().toISOString(), source: 'custom' };
+		} catch { return null; }
 	}
 
 	dispose(): void {
 		this.stopWatching();
 		this._hasConsent = false;
 		this._location = null;
-		this._error = null;
 	}
 }
 
-/**
- * Handles device information detection
- */
-class DeviceInfoService {
-	static getDeviceInfo(): DeviceInfo {
-		const userAgent = navigator.userAgent;
-		const platform = navigator.platform;
+// ── Device info helper ────────────────────────────────────────────────────────
 
-		// Detect device type
-		const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-		const isTablet = /iPad|Android(?=.*Tablet)|Windows NT.*Touch/i.test(userAgent);
+function getDeviceInfo(): DeviceInfo {
+	const ua = navigator.userAgent;
+	const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+	const isTablet = /iPad|Android(?=.*Tablet)|Windows NT.*Touch/i.test(ua);
+	const type: DeviceInfo['type'] = isTablet ? 'tablet' : isMobile ? 'mobile' : 'desktop';
 
-		let deviceType: DeviceInfo['type'] = 'unknown';
-		if (isTablet) deviceType = 'tablet';
-		else if (isMobile) deviceType = 'mobile';
-		else deviceType = 'desktop';
+	const browserMatch = ua.match(/(firefox|chrome|safari|opera|edge|msie|trident(?=\/))\/?\s*(\d+)/i);
+	const browser = browserMatch ? browserMatch[1] : 'Unknown';
+	const browserVersion = browserMatch ? browserMatch[2] : '';
 
-		// Detect browser and version
-		const browserMatch = userAgent.match(
-			/(firefox|chrome|safari|opera|edge|msie|trident(?=\/))\/?\s*(\d+)/i
-		);
-		const browser = browserMatch ? browserMatch[1] : 'Unknown';
-		const browserVersion = browserMatch ? browserMatch[2] : '';
-
-		// Detect OS and version
-		let os = 'Unknown';
-		let osVersion = '';
-
-		if (userAgent.includes('Windows NT')) {
-			os = 'Windows';
-			const winMatch = userAgent.match(/Windows NT ([\d.]+)/);
-			osVersion = winMatch ? winMatch[1] : '';
-		} else if (userAgent.includes('Mac OS X')) {
-			os = 'macOS';
-			const macMatch = userAgent.match(/Mac OS X ([\d_]+)/);
-			osVersion = macMatch ? macMatch[1].replace(/_/g, '.') : '';
-		} else if (userAgent.includes('Linux')) {
-			os = 'Linux';
-		} else if (userAgent.includes('Android')) {
-			os = 'Android';
-			const androidMatch = userAgent.match(/Android ([\d.]+)/);
-			osVersion = androidMatch ? androidMatch[1] : '';
-		} else if (userAgent.includes('iOS')) {
-			os = 'iOS';
-			const iosMatch = userAgent.match(/OS ([\d_]+)/);
-			osVersion = iosMatch ? iosMatch[1].replace(/_/g, '.') : '';
-		}
-
-		// Generate device ID
-		const deviceId = `${browser}-${os}-${platform}`.replace(/[^a-zA-Z0-9-]/g, '');
-
-		// Get screen resolution and timezone
-		const screenResolution = `${screen.width}x${screen.height}`;
-		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-		return {
-			id: deviceId,
-			type: deviceType,
-			browser,
-			browserVersion,
-			os,
-			osVersion,
-			userAgent,
-			screenResolution,
-			timezone
-		};
+	let os = 'Unknown', osVersion = '';
+	if (ua.includes('Windows NT')) {
+		os = 'Windows';
+		osVersion = ua.match(/Windows NT ([\d.]+)/)?.[1] ?? '';
+	} else if (ua.includes('Mac OS X')) {
+		os = 'macOS';
+		osVersion = (ua.match(/Mac OS X ([\d_]+)/)?.[1] ?? '').replace(/_/g, '.');
+	} else if (ua.includes('Android')) {
+		os = 'Android';
+		osVersion = ua.match(/Android ([\d.]+)/)?.[1] ?? '';
+	} else if (ua.includes('Linux')) {
+		os = 'Linux';
+	} else if (ua.includes('iOS')) {
+		os = 'iOS';
+		osVersion = (ua.match(/OS ([\d_]+)/)?.[1] ?? '').replace(/_/g, '.');
 	}
+
+	return {
+		id: `${browser}-${os}`.replace(/[^a-zA-Z0-9-]/g, ''),
+		type,
+		browser,
+		browserVersion,
+		os,
+		osVersion,
+		userAgent: ua,
+		screenResolution: `${screen.width}x${screen.height}`,
+		timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+	};
 }
 
+// ── Main presence service ─────────────────────────────────────────────────────
+
 /**
- * Main presence tracking service
+ * Reactive user presence tracking via Firebase Realtime Database.
  *
- * @class FirekitPresence
+ * Monitors RTDB `.info/connected`, writes session data on connect,
+ * registers `onDisconnect` cleanup, and tracks page visibility changes.
+ *
  * @example
- * ```typescript
+ * ```ts
  * import { firekitPresence } from 'svelte-firekit';
- *
- * // Initialize
- * await firekitPresence.initialize(user, {
- *   geolocation: { enabled: true, type: 'browser' },
- *   sessionTTL: 30 * 60 * 1000
- * });
- *
- * // Access reactive state
- * $: console.log('Status:', firekitPresence.status);
+ * await firekitPresence.initialize(user, { sessionTTL: 30 * 60 * 1000 });
  * ```
  */
 class FirekitPresence {
 	private static instance: FirekitPresence;
-	private config: PresenceConfig = {
-		sessionTTL: 30 * 60 * 1000,
-		updateInterval: 60 * 1000,
-		trackDeviceInfo: true
-	};
 
-	private geolocationService: GeolocationService | null = null;
-	private connectedListener: (() => void) | null = null;
-	private currentUser: any = null;
+	// ── Reactive state ──────────────────────────────────────────────────────
 
-	// Reactive state using Svelte 5 runes
 	private _initialized = $state(false);
 	private _status = $state<SessionData['status']>('offline');
 	private _loading = $state(false);
@@ -305,443 +197,242 @@ class FirekitPresence {
 	private _currentSession = $state<SessionData | null>(null);
 	private _sessions = $state<SessionData[]>([]);
 
+	// ── Internal ────────────────────────────────────────────────────────────
+
+	private _config: PresenceConfig = { sessionTTL: 30 * 60_000, updateInterval: 60_000, trackDeviceInfo: true };
+	private _geo: GeolocationService | null = null;
+	private _connectedUnsub: (() => void) | null = null;
+	private _currentUser: { uid: string } | null = null;
+
 	private constructor() {
-		if (browser) {
-			this.setupVisibilityListener();
+		if (typeof window !== 'undefined') {
+			document.addEventListener('visibilitychange', this._onVisibilityChange);
 		}
 	}
 
-	/**
-	 * Gets singleton instance of FirekitPresence
-	 */
 	static getInstance(): FirekitPresence {
-		if (!FirekitPresence.instance) {
-			FirekitPresence.instance = new FirekitPresence();
-		}
+		if (!FirekitPresence.instance) FirekitPresence.instance = new FirekitPresence();
 		return FirekitPresence.instance;
 	}
 
-	// ========================================
-	// REACTIVE GETTERS
-	// ========================================
+	// ── Getters ─────────────────────────────────────────────────────────────
 
-	get initialized(): boolean {
-		return this._initialized;
-	}
+	get initialized(): boolean { return this._initialized; }
+	get status(): SessionData['status'] { return this._status; }
+	get loading(): boolean { return this._loading; }
+	get error(): PresenceError | null { return this._error; }
+	get currentSession(): SessionData | null { return this._currentSession; }
+	get sessions(): SessionData[] { return this._sessions; }
+	get location(): Location | null { return this._geo?.location ?? null; }
+	get hasLocationConsent(): boolean { return this._geo?.hasConsent ?? false; }
 
-	get status(): SessionData['status'] {
-		return this._status;
-	}
+	// ── Initialization ───────────────────────────────────────────────────────
 
-	get loading(): boolean {
-		return this._loading;
-	}
+	async initialize(user: { uid: string }, config?: PresenceConfig): Promise<void> {
+		if (typeof window === 'undefined') {
+			throw new PresenceError(
+				PresenceErrorCode.INITIALIZATION_FAILED,
+				'Presence can only be initialized in a browser environment.'
+			);
+		}
+		if (this._initialized) return;
 
-	get error(): PresenceError | null {
-		return this._error;
-	}
+		this._loading = true;
+		this._currentUser = user;
+		if (config) this._config = { ...this._config, ...config };
 
-	get currentSession(): SessionData | null {
-		return this._currentSession;
-	}
-
-	get sessions(): SessionData[] {
-		return this._sessions;
-	}
-
-	get location(): Location | null {
-		return this.geolocationService?.location || null;
-	}
-
-	get hasLocationConsent(): boolean {
-		return this.geolocationService?.hasConsent || false;
-	}
-
-	// ========================================
-	// INITIALIZATION
-	// ========================================
-
-	/**
-	 * Initialize presence tracking
-	 * @param user Current authenticated user
-	 * @param config Presence configuration options
-	 */
-	async initialize(user: any, config?: PresenceConfig): Promise<void> {
 		try {
-			if (!browser) {
-				throw new PresenceError(
-					PresenceErrorCode.INITIALIZATION_FAILED,
-					'Presence service can only be initialized in browser environment'
-				);
-			}
-
-			if (this._initialized) {
-				console.warn('Presence service is already initialized');
-				return;
-			}
-
-			this._loading = true;
-			this.currentUser = user;
-			this.config = { ...this.config, ...config };
-
-			// Initialize geolocation service if enabled
-			if (this.config.geolocation?.enabled) {
-				this.geolocationService = new GeolocationService(this.config.geolocation);
-
-				if (this.config.geolocation.requireConsent) {
-					const hasConsent = await this.geolocationService.requestConsent();
+			if (this._config.geolocation?.enabled) {
+				this._geo = new GeolocationService(this._config.geolocation);
+				if (this._config.geolocation.requireConsent) {
+					await this._geo.requestConsent();
 				}
-
-				// Start location tracking if consent granted
-				if (!this.config.geolocation.requireConsent || this.geolocationService.hasConsent) {
-					this.geolocationService.startWatching(this.config.updateInterval!);
+				if (!this._config.geolocation.requireConsent || this._geo.hasConsent) {
+					this._geo.startWatching(this._config.updateInterval!);
 				}
 			}
 
-			// Set up Firebase connection monitoring
-			await this.setupConnectionMonitoring();
-
+			await this._setupConnectionMonitoring();
 			this._initialized = true;
-		} catch (error) {
-			this._error =
-				error instanceof PresenceError
-					? error
-					: new PresenceError(
-							PresenceErrorCode.INITIALIZATION_FAILED,
-							`Failed to initialize presence service: ${(error as Error).message}`,
-							error
-						);
+		} catch (err) {
+			// Clean up geolocation if it started before the error
+			this._geo?.dispose();
+			this._geo = null;
+			this._error = err instanceof PresenceError
+				? err
+				: new PresenceError(PresenceErrorCode.INITIALIZATION_FAILED, (err as Error).message, err);
 			throw this._error;
 		} finally {
 			this._loading = false;
 		}
 	}
 
-	/**
-	 * Set up Firebase connection monitoring
-	 */
-	private async setupConnectionMonitoring(): Promise<void> {
+	// ── Connection monitoring ────────────────────────────────────────────────
+
+	private async _setupConnectionMonitoring(): Promise<void> {
 		const db = firebaseService.getDatabaseInstance();
-		if (!db) {
-			throw new PresenceError(
-				PresenceErrorCode.DATABASE_ERROR,
-				'Firebase Database instance not available'
-			);
-		}
+		if (!db) throw new PresenceError(PresenceErrorCode.DATABASE_ERROR, 'Realtime Database is not initialized.');
 
 		const connectedRef = ref(db, '.info/connected');
-
-		this.connectedListener = onValue(connectedRef, async (snapshot) => {
-			if (snapshot.val() === true) {
+		this._connectedUnsub = onValue(connectedRef, async (snap) => {
+			if (snap.val() === true) {
 				await this.setPresence('online');
-				await this.setupDisconnectHandler();
+				await this._setupDisconnectHandler();
 			} else {
-				await this.setPresence('offline');
+				this._status = 'offline';
 			}
 		});
 	}
 
-	/**
-	 * Set up disconnect handler for graceful offline transitions
-	 */
-	private async setupDisconnectHandler(): Promise<void> {
-		if (!this.currentUser || !this._currentSession) return;
-
+	private async _setupDisconnectHandler(): Promise<void> {
+		if (!this._currentUser || !this._currentSession) return;
 		const db = firebaseService.getDatabaseInstance();
 		if (!db) return;
 
-		const sessionPath = this.config.sessionPath || 'presence';
-		const sessionRef = ref(
-			db,
-			`${sessionPath}/${this.currentUser.uid}/sessions/${this._currentSession.id}`
-		);
-
-		await onDisconnect(sessionRef).update({
+		const path = `${this._config.sessionPath ?? 'presence'}/${this._currentUser.uid}/sessions/${this._currentSession.id}`;
+		await onDisconnect(ref(db, path)).update({
 			status: 'offline',
 			lastSeen: serverTimestamp()
 		});
 	}
 
-	/**
-	 * Set up page visibility listener
-	 */
-	private setupVisibilityListener(): void {
-		if (!browser) return;
+	private _onVisibilityChange = async () => {
+		if (!this._initialized) return;
+		await this.setPresence(document.visibilityState === 'hidden' ? 'away' : 'online');
+	};
 
-		document.addEventListener('visibilitychange', async () => {
-			if (!this._initialized) return;
+	// ── Presence management ──────────────────────────────────────────────────
 
-			if (document.visibilityState === 'hidden') {
-				await this.setPresence('away');
-			} else {
-				await this.setPresence('online');
-			}
-		});
-	}
-
-	// ========================================
-	// PRESENCE MANAGEMENT
-	// ========================================
-
-	/**
-	 * Set presence status
-	 */
 	async setPresence(status: SessionData['status']): Promise<void> {
+		if (!this._currentUser) {
+			throw new PresenceError(PresenceErrorCode.USER_NOT_AUTHENTICATED, 'No authenticated user.');
+		}
+		const db = firebaseService.getDatabaseInstance();
+		if (!db) throw new PresenceError(PresenceErrorCode.DATABASE_ERROR, 'Realtime Database is not initialized.');
+
 		try {
-			if (!this.currentUser) {
-				throw new PresenceError(
-					PresenceErrorCode.USER_NOT_AUTHENTICATED,
-					'No authenticated user found'
-				);
-			}
+			const location = await this._geo?.getCurrentLocation() ?? undefined;
+			const device = this._config.trackDeviceInfo ? getDeviceInfo() : undefined;
+			const now = new Date().toISOString();
 
-			const db = firebaseService.getDatabaseInstance();
-			if (!db) {
-				throw new PresenceError(
-					PresenceErrorCode.DATABASE_ERROR,
-					'Firebase Database instance not available'
-				);
-			}
+			const session: SessionData = this._currentSession
+				? { ...this._currentSession, status, lastSeen: now, lastActivity: now, ...(location && { location }) }
+				: {
+						id: `${this._currentUser.uid}_${device?.id ?? Date.now()}`,
+						userId: this._currentUser.uid,
+						status,
+						createdAt: now,
+						lastSeen: now,
+						lastActivity: now,
+						...(location && { location }),
+						...(device && { device }),
+						...(this._config.customMetadata && { metadata: this._config.customMetadata })
+					};
 
-			// Get current location if available
-			const location = await this.geolocationService?.getCurrentLocation();
-
-			// Get device info if enabled
-			const device = this.config.trackDeviceInfo ? DeviceInfoService.getDeviceInfo() : undefined;
-
-			let session: SessionData;
-
-			if (!this._currentSession) {
-				// Create new session
-				session = {
-					id: `${this.currentUser.uid}_${device?.id || Date.now()}`,
-					userId: this.currentUser.uid,
-					status,
-					createdAt: new Date().toISOString(),
-					lastSeen: new Date().toISOString(),
-					lastActivity: new Date().toISOString(),
-					...(location && { location }),
-					...(device && { device }),
-					...(this.config.customMetadata && { metadata: this.config.customMetadata })
-				};
-			} else {
-				// Update existing session
-				session = {
-					...this._currentSession,
-					status,
-					lastSeen: new Date().toISOString(),
-					lastActivity: new Date().toISOString(),
-					...(location && { location })
-				};
-			}
-
-			// Save session to Firebase
-			const sessionPath = this.config.sessionPath || 'presence';
-			const sessionRef = ref(db, `${sessionPath}/${this.currentUser.uid}/sessions/${session.id}`);
+			const sessionRef = ref(
+				db,
+				`${this._config.sessionPath ?? 'presence'}/${this._currentUser.uid}/sessions/${session.id}`
+			);
 			await set(sessionRef, session);
 
-			// Update local state
 			this._currentSession = session;
 			this._status = status;
-
-			// Load and update all sessions
-			await this.loadSessions();
-		} catch (error) {
-			this._error =
-				error instanceof PresenceError
-					? error
-					: new PresenceError(
-							PresenceErrorCode.DATABASE_ERROR,
-							`Failed to set presence: ${(error as Error).message}`,
-							error
-						);
+			await this._loadSessions();
+		} catch (err) {
+			this._error = err instanceof PresenceError
+				? err
+				: new PresenceError(PresenceErrorCode.DATABASE_ERROR, (err as Error).message, err);
 			throw this._error;
 		}
 	}
 
-	/**
-	 * Load all sessions for current user
-	 */
-	private async loadSessions(): Promise<void> {
-		if (!this.currentUser) return;
+	private async _loadSessions(): Promise<void> {
+		if (!this._currentUser) return;
+		const db = firebaseService.getDatabaseInstance();
+		if (!db) return;
 
-		try {
-			const db = firebaseService.getDatabaseInstance();
-			if (!db) return;
+		const basePath = `${this._config.sessionPath ?? 'presence'}/${this._currentUser.uid}/sessions`;
+		const snap = await get(ref(db, basePath));
+		if (!snap.exists()) { this._sessions = []; return; }
 
-			const sessionPath = this.config.sessionPath || 'presence';
-			const sessionsRef = ref(db, `${sessionPath}/${this.currentUser.uid}/sessions`);
-			const snapshot = await get(sessionsRef);
+		let sessions = Object.values(snap.val() as Record<string, SessionData>);
 
-			if (snapshot.exists()) {
-				const sessionsData = snapshot.val();
-				let sessions = Object.values(sessionsData) as SessionData[];
-
-				// Clean up stale sessions
-				if (this.config.sessionTTL) {
-					const cutoffTime = new Date(Date.now() - this.config.sessionTTL).toISOString();
-					const expiredSessions = sessions.filter((session) => session.lastSeen < cutoffTime);
-					sessions = sessions.filter((session) => session.lastSeen >= cutoffTime);
-
-					// Remove stale sessions from database
-					for (const expiredSession of expiredSessions) {
-						const staleSessionRef = ref(
-							db,
-							`${sessionPath}/${this.currentUser.uid}/sessions/${expiredSession.id}`
-						);
-						await set(staleSessionRef, null);
-					}
-				}
-
-				this._sessions = sessions;
-			} else {
-				this._sessions = [];
-			}
-		} catch (error) {
-			console.error('Failed to load sessions:', error);
+		if (this._config.sessionTTL) {
+			const cutoff = new Date(Date.now() - this._config.sessionTTL).toISOString();
+			const expired = sessions.filter((s) => s.lastSeen < cutoff);
+			sessions = sessions.filter((s) => s.lastSeen >= cutoff);
+			await Promise.all(
+				expired.map((s) =>
+					set(ref(db, `${basePath}/${s.id}`), null)
+				)
+			);
 		}
+
+		this._sessions = sessions;
 	}
 
-	// ========================================
-	// UTILITY METHODS
-	// ========================================
+	// ── Helpers ──────────────────────────────────────────────────────────────
 
-	/**
-	 * Get presence statistics
-	 */
-	getPresenceStats(): PresenceStats {
+	getStats(): PresenceStats {
 		const sessions = this._sessions;
-		let totalSessionTime = 0;
-		const deviceSet = new Set<string>();
-		let lastActivityTime = 0;
+		let totalMs = 0;
+		const devices = new Set<string>();
+		let lastActivity = 0;
 
-		sessions.forEach((session) => {
-			if (session.device?.id) {
-				deviceSet.add(session.device.id);
-			}
-
-			const sessionStart = new Date(session.createdAt).getTime();
-			const sessionEnd = new Date(session.lastSeen).getTime();
-			totalSessionTime += sessionEnd - sessionStart;
-
-			if (session.lastActivity) {
-				const activityTime = new Date(session.lastActivity).getTime();
-				lastActivityTime = Math.max(lastActivityTime, activityTime);
-			}
-		});
-
-		const averageSessionDuration = sessions.length > 0 ? totalSessionTime / sessions.length : 0;
+		for (const s of sessions) {
+			if (s.device?.id) devices.add(s.device.id);
+			totalMs += new Date(s.lastSeen).getTime() - new Date(s.createdAt).getTime();
+			if (s.lastActivity) lastActivity = Math.max(lastActivity, new Date(s.lastActivity).getTime());
+		}
 
 		return {
 			totalSessions: sessions.length,
 			onlineSessions: sessions.filter((s) => s.status === 'online').length,
 			awaySessions: sessions.filter((s) => s.status === 'away').length,
 			offlineSessions: sessions.filter((s) => s.status === 'offline').length,
-			uniqueDevices: deviceSet.size,
-			averageSessionDuration,
-			lastActivity: lastActivityTime > 0 ? new Date(lastActivityTime).toISOString() : ''
+			uniqueDevices: devices.size,
+			averageSessionDuration: sessions.length > 0 ? totalMs / sessions.length : 0,
+			lastActivity: lastActivity > 0 ? new Date(lastActivity).toISOString() : ''
 		};
 	}
 
-	/**
-	 * Request location consent manually
-	 */
-	async requestLocationConsent(): Promise<boolean> {
-		if (!this.geolocationService) {
-			throw new PresenceError(
-				PresenceErrorCode.GEOLOCATION_UNAVAILABLE,
-				'Geolocation service not available'
-			);
-		}
-		return await this.geolocationService.requestConsent();
-	}
-
-	/**
-	 * Get current user's online sessions count
-	 */
-	getOnlineSessionsCount(): number {
-		return this._sessions.filter((session) => session.status === 'online').length;
-	}
-
-	/**
-	 * Check if user is online on any device
-	 */
-	isUserOnline(): boolean {
-		return this._sessions.some((session) => session.status === 'online');
-	}
-
-	/**
-	 * Get sessions by status
-	 */
+	isOnline(): boolean { return this._sessions.some((s) => s.status === 'online'); }
 	getSessionsByStatus(status: SessionData['status']): SessionData[] {
-		return this._sessions.filter((session) => session.status === status);
+		return this._sessions.filter((s) => s.status === status);
 	}
 
-	/**
-	 * Force refresh presence data
-	 */
+	async requestLocationConsent(): Promise<boolean> {
+		if (!this._geo) throw new PresenceError(PresenceErrorCode.GEOLOCATION_UNAVAILABLE, 'Geolocation not configured.');
+		return this._geo.requestConsent();
+	}
+
 	async refresh(): Promise<void> {
 		if (!this._initialized) return;
-
 		this._loading = true;
 		try {
-			await this.loadSessions();
-			if (this._currentSession) {
-				await this.setPresence(this._status);
-			}
+			await this._loadSessions();
+			if (this._currentSession) await this.setPresence(this._status);
 		} finally {
 			this._loading = false;
 		}
 	}
 
-	// ========================================
-	// CLEANUP
-	// ========================================
-
-	/**
-	 * Dispose of all resources and cleanup
-	 */
 	async dispose(): Promise<void> {
-		try {
-			// Set status to offline before cleanup
-			if (this._currentSession) {
-				await this.setPresence('offline');
-			}
-		} catch (error) {
-			console.error('Error setting offline status during disposal:', error);
+		if (this._currentSession) {
+			try { await this.setPresence('offline'); } catch { /* best-effort */ }
 		}
-
-		// Stop location tracking
-		this.geolocationService?.dispose();
-
-		// Remove connection listener
-		if (this.connectedListener) {
-			this.connectedListener();
-			this.connectedListener = null;
+		this._geo?.dispose();
+		this._connectedUnsub?.();
+		this._connectedUnsub = null;
+		if (typeof document !== 'undefined') {
+			document.removeEventListener('visibilitychange', this._onVisibilityChange);
 		}
-
-		// Reset state
 		this._initialized = false;
 		this._status = 'offline';
-		this._loading = false;
 		this._error = null;
 		this._currentSession = null;
 		this._sessions = [];
 	}
 }
 
-/**
- * Pre-initialized singleton instance of FirekitPresence.
- *
- * @example
- * ```typescript
- * import { firekitPresence } from 'svelte-firekit';
- *
- * // Initialize presence tracking
- * await firekitPresence.initialize(user, {
- *   geolocation: { enabled: true, type: 'browser' },
- *   sessionTTL: 30 * 60 * 1000
- * });
- * ```
- */
 export const firekitPresence = FirekitPresence.getInstance();

@@ -5,14 +5,16 @@ import type { Functions } from 'firebase/functions';
 import type { Database } from 'firebase/database';
 import type { FirebaseStorage } from 'firebase/storage';
 import type { Analytics } from 'firebase/analytics';
+import type { AppCheck } from 'firebase/app-check';
+import type { RemoteConfig } from 'firebase/remote-config';
+import type { FirebasePerformance } from 'firebase/performance';
+import type { Messaging } from 'firebase/messaging';
 
-/**
- * Type definition for required Firebase environment variables
- */
 export type FirebaseEnvVars = FirebaseOptions;
 
 /**
- * Type guard to check if an object contains all required Firebase environment variables
+ * Type guard — requires the six fields that are always mandatory.
+ * measurementId is Analytics-only and intentionally omitted.
  */
 export function isValidFirebaseConfig(config: Partial<FirebaseEnvVars>): config is FirebaseEnvVars {
 	return (
@@ -21,14 +23,10 @@ export function isValidFirebaseConfig(config: Partial<FirebaseEnvVars>): config 
 		typeof config.projectId === 'string' &&
 		typeof config.storageBucket === 'string' &&
 		typeof config.messagingSenderId === 'string' &&
-		typeof config.appId === 'string' &&
-		typeof config.measurementId === 'string'
+		typeof config.appId === 'string'
 	);
 }
 
-/**
- * Enum representing the initialization status of Firebase services
- */
 export enum FirebaseServiceStatus {
 	UNINITIALIZED = 'UNINITIALIZED',
 	INITIALIZING = 'INITIALIZING',
@@ -36,9 +34,6 @@ export enum FirebaseServiceStatus {
 	ERROR = 'ERROR'
 }
 
-/**
- * Error class for Firebase service initialization failures
- */
 export class FirebaseServiceError extends Error {
 	constructor(
 		message: string,
@@ -49,9 +44,6 @@ export class FirebaseServiceError extends Error {
 	}
 }
 
-/**
- * Interface for Firebase service instance
- */
 export interface FirebaseServiceInstance {
 	firebaseApp: FirebaseApp | null;
 	db: Firestore | null;
@@ -60,6 +52,10 @@ export interface FirebaseServiceInstance {
 	database: Database | null;
 	storage: FirebaseStorage | null;
 	analytics: Analytics | null;
+	appCheck: AppCheck | null;
+	remoteConfig: RemoteConfig | null;
+	performance: FirebasePerformance | null;
+	messaging: Messaging | null;
 	status: FirebaseServiceStatus;
 	initializationError: Error | null;
 	isBrowser: boolean;

@@ -2,9 +2,7 @@ import type { User } from 'firebase/auth';
 import type { UserProfile } from '../types/auth.js';
 
 /**
- * Maps Firebase User to UserProfile interface
- * @param {User} user Firebase user object
- * @returns {UserProfile} Mapped user profile
+ * Maps a Firebase User object to the Firekit UserProfile interface.
  */
 export function mapFirebaseUserToProfile(user: User): UserProfile {
 	return {

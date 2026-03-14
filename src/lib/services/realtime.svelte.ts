@@ -1,9 +1,3 @@
-/**
- * @fileoverview FirekitRealtimeDB - Optimized Realtime Database management for Svelte applications
- * @module FirekitRealtimeDB
- * @version 1.0.0
- */
-
 import {
 	ref,
 	onValue,
@@ -11,247 +5,192 @@ import {
 	set,
 	update,
 	remove,
+	get,
+	serverTimestamp,
+	increment,
 	type DatabaseReference,
 	type DataSnapshot
 } from 'firebase/database';
 import { firebaseService } from '../firebase.js';
-import { browser } from '$app/environment';
+
+function getDb() {
+	const db = firebaseService.getDatabaseInstance();
+	if (!db) throw new Error('Realtime Database is not initialized.');
+	return db;
+}
 
 /**
- * Manages real-time Firebase Realtime Database subscriptions with reactive state
- * @class
- * @template T Data type
+ * Reactive Firebase Realtime Database node subscription.
+ *
+ * Subscribes to a database path and exposes reactive state via Svelte 5 runes.
+ * Supports read and write operations on the same reference.
  *
  * @example
- * ```typescript
- * interface ChatMessage {
- *   text: string;
- *   userId: string;
- *   timestamp: number;
- * }
- *
- * // Create regular reference
- * const chatRef = firekitRealtimeDB<ChatMessage>('chats/123');
- *
- * // Create list reference
- * const messagesList = firekitRealtimeList<ChatMessage>('messages');
+ * ```svelte
+ * <script lang="ts">
+ *   import { firekitNode } from 'svelte-firekit';
+ *   const chat = firekitNode<ChatMessage>('chats/room1');
+ * </script>
+ * {#if chat.loading}Loading…{/if}
+ * {#if chat.data}{chat.data.text}{/if}
  * ```
  */
-class FirekitRealtimeDB<T> {
-	/** Current data */
+export class FirekitNode<T = unknown> {
+	// ── Reactive state ────────────────────────────────────────────────────────
+
 	private _data = $state<T | null>(null);
-	/** Loading state */
 	private _loading = $state(true);
-	/** Error state */
 	private _error = $state<Error | null>(null);
-	/** Database reference */
-	private dbRef: DatabaseReference | null = null;
-	/** Subscription cleanup function */
-	private unsubscribe: (() => void) | null = null;
 
-	/**
-	 * Creates a Realtime Database subscription
-	 * @param {string} path Database path
-	 * @param {T} [startWith] Initial data before fetch completes
-	 */
+	// ── Internal ──────────────────────────────────────────────────────────────
+
+	private _ref: DatabaseReference | null = null;
+	private _unsubscribe: (() => void) | null = null;
+	private _path: string;
+
 	constructor(path: string, startWith?: T) {
-		this._data = startWith ?? null;
-
-		if (browser) {
-			this.initializeRealtimeDB(path);
-		}
+		this._path = path;
+		if (startWith !== undefined) this._data = startWith;
+		this._init();
 	}
 
-	/**
-	 * Initializes database subscription
-	 * @private
-	 * @param {string} path Database path
-	 */
-	private initializeRealtimeDB(path: string) {
+	// ── Public getters ────────────────────────────────────────────────────────
+
+	get data(): T | null { return this._data; }
+	get loading(): boolean { return this._loading; }
+	get error(): Error | null { return this._error; }
+	get path(): string { return this._path; }
+
+	get ref(): DatabaseReference {
+		if (!this._ref) throw new Error('Database reference is not available.');
+		return this._ref;
+	}
+
+	// ── Initialization ────────────────────────────────────────────────────────
+
+	private _init(): void {
+		if (typeof window === 'undefined') {
+			this._loading = false;
+			return;
+		}
+
 		try {
-			const database = firebaseService.getDatabaseInstance();
-			if (!database) {
-				throw new Error('Database instance not available');
-			}
+			const db = getDb();
+			this._ref = ref(db, this._path);
 
-			this.dbRef = ref(database, path);
-
-			this.unsubscribe = onValue(
-				this.dbRef,
-				(snapshot: DataSnapshot) => {
-					this._data = snapshot.val();
-					this._loading = false;
+			this._unsubscribe = onValue(
+				this._ref,
+				(snap: DataSnapshot) => {
+					this._data = snap.val() as T | null;
 					this._error = null;
+					this._loading = false;
 				},
-				(error) => {
-					this._error = error;
+				(err) => {
+					this._error = err;
 					this._loading = false;
 				}
 			);
-		} catch (error) {
-			this._error = error as Error;
+		} catch (err) {
+			this._error = err instanceof Error ? err : new Error(String(err));
 			this._loading = false;
 		}
 	}
 
-	/**
-	 * Pushes new data to list
-	 * @param {T} data Data to push
-	 * @returns {Promise<string | null>} New item key or null if failed
-	 *
-	 * @example
-	 * ```typescript
-	 * const key = await chatRef.push({
-	 *   text: 'Hello',
-	 *   userId: '123',
-	 *   timestamp: Date.now()
-	 * });
-	 * ```
-	 */
+	// ── Write operations ──────────────────────────────────────────────────────
+
+	/** Pushes a new child node (list append). Returns the new key, or null on failure. */
 	async push(data: T): Promise<string | null> {
-		if (!this.dbRef) return null;
-		const newRef = push(this.dbRef);
+		if (!this._ref) return null;
+		const newRef = push(this._ref);
 		await set(newRef, data);
 		return newRef.key;
 	}
 
-	/**
-	 * Sets data at reference
-	 * @param {T} data Data to set
-	 *
-	 * @example
-	 * ```typescript
-	 * await chatRef.set({
-	 *   text: 'Updated message',
-	 *   userId: '123',
-	 *   timestamp: Date.now()
-	 * });
-	 * ```
-	 */
+	/** Overwrites the node with new data. */
 	async set(data: T): Promise<void> {
-		if (!this.dbRef) return;
-		await set(this.dbRef, data);
+		if (!this._ref) return;
+		await set(this._ref, data);
 	}
 
-	/**
-	 * Updates data at reference
-	 * @param {Partial<T>} data Data to update
-	 *
-	 * @example
-	 * ```typescript
-	 * await chatRef.update({
-	 *   text: 'Edited message'
-	 * });
-	 * ```
-	 */
+	/** Merges partial data into the node (shallow merge). */
 	async update(data: Partial<T>): Promise<void> {
-		if (!this.dbRef) return;
-		await update(this.dbRef, data);
+		if (!this._ref) return;
+		await update(this._ref, data as Record<string, unknown>);
 	}
 
-	/**
-	 * Removes data at reference
-	 *
-	 * @example
-	 * ```typescript
-	 * await chatRef.remove();
-	 * ```
-	 */
+	/** Deletes the node. */
 	async remove(): Promise<void> {
-		if (!this.dbRef) return;
-		await remove(this.dbRef);
+		if (!this._ref) return;
+		await remove(this._ref);
 	}
 
-	/** Gets current data */
-	get data(): T | null {
-		return this._data;
+	/** One-time fetch of current data (no subscription). */
+	async fetchOnce(): Promise<T | null> {
+		if (!this._ref) return null;
+		const snap = await get(this._ref);
+		return snap.val() as T | null;
 	}
 
-	/** Gets loading state */
-	get loading(): boolean {
-		return this._loading;
-	}
-
-	/** Gets error state */
-	get error(): Error | null {
-		return this._error;
-	}
-
-	/**
-	 * Gets database reference
-	 * @throws {Error} If reference is not available
-	 */
-	get ref(): DatabaseReference {
-		if (!this.dbRef) {
-			throw new Error('Database reference is not available');
-		}
-		return this.dbRef;
-	}
-
-	/** Cleanup subscription */
+	/** Stops the real-time listener. */
 	dispose(): void {
-		if (this.unsubscribe) {
-			this.unsubscribe();
-			this.unsubscribe = null;
-		}
+		this._unsubscribe?.();
+		this._unsubscribe = null;
 	}
 }
 
 /**
- * Creates a reactive Realtime Database reference
- * @template T Data type
- * @param {string} path Database path
- * @param {T} [startWith] Initial data
- * @returns {FirekitRealtimeDB<T>} Database subscription instance
+ * Reactive RTDB list — subscribes to a node and exposes its children as
+ * a typed array with each item's key injected as `id`.
  *
  * @example
- * ```typescript
- * const chatRef = firekitRealtimeDB<ChatMessage>('chats/123');
+ * ```svelte
+ * <script lang="ts">
+ *   import { firekitNodeList } from 'svelte-firekit';
+ *   const messages = firekitNodeList<Message>('rooms/123/messages');
+ * </script>
+ * {#each messages.list as msg}
+ *   <p>{msg.id}: {msg.text}</p>
+ * {/each}
  * ```
  */
-export function firekitRealtimeDB<T>(path: string, startWith?: T): FirekitRealtimeDB<T> {
-	return new FirekitRealtimeDB<T>(path, startWith);
+export class FirekitNodeList<T = unknown> extends FirekitNode<Record<string, T>> {
+	readonly list = $derived(
+		this.data
+			? Object.entries(this.data).map(([key, value]) => ({
+					id: key,
+					...(value as object)
+				})) as Array<T & { id: string }>
+			: ([] as Array<T & { id: string }>)
+	);
+}
+
+// ── Field value helpers ───────────────────────────────────────────────────────
+
+/** RTDB server timestamp sentinel. */
+export const rtdbServerTimestamp = serverTimestamp;
+
+/** RTDB increment sentinel. */
+export const rtdbIncrement = increment;
+
+// ── Factory functions ─────────────────────────────────────────────────────────
+
+/**
+ * Creates a reactive RTDB node subscription.
+ */
+export function firekitNode<T = unknown>(path: string, startWith?: T): FirekitNode<T> {
+	return new FirekitNode<T>(path, startWith);
 }
 
 /**
- * Creates a reactive Realtime Database list reference
- * Automatically converts data to array format with IDs
- *
- * @template T List item type
- * @param {string} path Database path
- * @param {T[]} [startWith=[]] Initial array data
- * @returns {FirekitRealtimeDB} Database subscription instance with array support
- *
- * @example
- * ```typescript
- * const messagesList = firekitRealtimeList<ChatMessage>('messages');
- * console.log(messagesList.list); // Array of messages with IDs
- * ```
+ * Creates a reactive RTDB node subscription that exposes children as an array.
  */
-export function firekitRealtimeList<T>(
+export function firekitNodeList<T = unknown>(
 	path: string,
-	startWith: T[] = []
-): FirekitRealtimeDB<Record<string, T>> & { list: Array<T & { id: string }> } {
-	const startWithRecord = startWith.reduce(
-		(acc, item, index) => {
-			acc[`key${index}`] = item;
-			return acc;
-		},
-		{} as Record<string, T>
-	);
-
-	return new (class extends FirekitRealtimeDB<Record<string, T>> {
-		private _list = $derived(
-			this.data
-				? Object.entries(this.data).map(([key, value]) => ({
-						id: key,
-						...value
-					}))
-				: []
-		);
-
-		get list() {
-			return this._list;
-		}
-	})(path, startWithRecord);
+	startWith?: T[]
+): FirekitNodeList<T> {
+	let startRecord: Record<string, T> | undefined;
+	if (startWith) {
+		startRecord = Object.fromEntries(startWith.map((item, i) => [`__init_${i}`, item]));
+	}
+	return new FirekitNodeList<T>(path, startRecord);
 }

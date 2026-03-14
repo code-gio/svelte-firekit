@@ -1,12 +1,3 @@
-/**
- * @fileoverview Authentication types and interfaces for FirekitAuth
- * @module AuthTypes
- * @version 1.0.0
- */
-
-/**
- * User profile interface with all Firebase user properties
- */
 export interface UserProfile {
 	uid: string;
 	email: string | null;
@@ -28,83 +19,56 @@ export interface UserProfile {
 		phoneNumber: string | null;
 		photoURL: string | null;
 	}>;
-	customClaims?: Record<string, any>;
+	customClaims?: Record<string, unknown>;
 }
 
-/**
- * Authentication state interface
- */
 export interface AuthState {
 	user: UserProfile | null;
 	loading: boolean;
 	initialized: boolean;
 }
 
-/**
- * Base authentication result interface
- */
 export interface AuthResult {
 	success: boolean;
 	user: UserProfile;
 	method: AuthMethodType;
 	timestamp: Date;
-	additionalData?: Record<string, any>;
+	additionalData?: Record<string, unknown>;
 }
 
-/**
- * Sign-in result interface
- */
 export interface SignInResult extends AuthResult {
 	isNewUser: boolean;
 	requiresEmailVerification?: boolean;
 	requiresPhoneVerification?: boolean;
 }
 
-/**
- * Registration result interface
- */
 export interface RegistrationResult extends AuthResult {
 	emailVerificationSent: boolean;
 	requiresEmailVerification: boolean;
 }
 
-/**
- * OAuth sign-in result interface
- */
 export interface OAuthSignInResult extends SignInResult {
 	provider: OAuthProviderType;
 	accessToken?: string;
 	refreshToken?: string;
 }
 
-/**
- * Phone verification result interface
- */
 export interface PhoneVerificationResult {
 	verificationId: string;
 	confirm: (code: string) => Promise<SignInResult>;
 }
 
-/**
- * Password update result interface
- */
 export interface PasswordUpdateResult {
 	success: boolean;
 	message: string;
 	code?: string;
 }
 
-/**
- * Account deletion result interface
- */
 export interface AccountDeletionResult {
 	success: boolean;
 	message: string;
 }
 
-/**
- * User registration data interface
- */
 export interface UserRegistrationData {
 	email: string;
 	password: string;
@@ -112,17 +76,11 @@ export interface UserRegistrationData {
 	photoURL?: string;
 }
 
-/**
- * User profile update data interface
- */
 export interface UserProfileUpdateData {
 	displayName?: string;
 	photoURL?: string;
 }
 
-/**
- * Profile update result interface
- */
 export interface ProfileUpdateResult {
 	success: boolean;
 	user: UserProfile;
@@ -130,38 +88,28 @@ export interface ProfileUpdateResult {
 	message: string;
 }
 
-/**
- * Email verification result interface
- */
 export interface EmailVerificationResult {
 	success: boolean;
 	message: string;
 	emailSent: boolean;
 }
 
-/**
- * Password reset result interface
- */
 export interface PasswordResetResult {
 	success: boolean;
 	message: string;
 	emailSent: boolean;
 }
 
-/**
- * OAuth provider types
- */
 export type OAuthProviderType =
 	| 'google'
 	| 'facebook'
 	| 'apple'
 	| 'microsoft'
 	| 'github'
-	| 'twitter';
+	| 'twitter'
+	| 'saml'
+	| 'oidc';
 
-/**
- * Authentication method types
- */
 export type AuthMethodType =
 	| 'email'
 	| 'phone'
@@ -171,11 +119,22 @@ export type AuthMethodType =
 	| 'microsoft'
 	| 'github'
 	| 'twitter'
-	| 'anonymous';
+	| 'anonymous'
+	| 'custom'
+	| 'saml'
+	| 'oidc';
 
-/**
- * Authentication event types
- */
+export interface MFAEnrollmentResult {
+	success: boolean;
+	factorUid?: string;
+	message: string;
+}
+
+export interface MFAChallengeResult {
+	verificationId: string;
+	resolver: import('firebase/auth').MultiFactorResolver;
+}
+
 export type AuthEventType =
 	| 'signIn'
 	| 'signOut'
@@ -186,9 +145,6 @@ export type AuthEventType =
 	| 'accountDeletion'
 	| 'error';
 
-/**
- * Authentication event data interface
- */
 export interface AuthEventData {
 	type: AuthEventType;
 	user?: UserProfile | null;
@@ -197,25 +153,14 @@ export interface AuthEventData {
 	timestamp: Date;
 }
 
-/**
- * Authentication configuration interface
- */
 export interface AuthConfig {
-	/** Enable automatic Firestore user data sync */
 	enableFirestoreSync?: boolean;
-	/** Custom Firestore collection path for users */
 	usersCollectionPath?: string;
-	/** Enable email verification on registration */
 	requireEmailVerification?: boolean;
-	/** Custom error message overrides */
 	errorMessages?: Partial<Record<AuthErrorCode, string>>;
-	/** Enable analytics tracking */
 	enableAnalytics?: boolean;
 }
 
-/**
- * Authentication error codes enum
- */
 export enum AuthErrorCode {
 	EMAIL_ALREADY_IN_USE = 'auth/email-already-in-use',
 	INVALID_EMAIL = 'auth/invalid-email',
@@ -242,22 +187,16 @@ export enum AuthErrorCode {
 	INTERNAL_ERROR = 'auth/internal-error'
 }
 
-/**
- * Custom authentication error class
- */
 export class FirekitAuthError extends Error {
 	constructor(
 		public code: AuthErrorCode | string,
 		message: string,
-		public originalError?: any
+		public originalError?: unknown
 	) {
 		super(message);
 		this.name = 'FirekitAuthError';
 	}
 
-	/**
-	 * Get user-friendly error message
-	 */
 	getFriendlyMessage(): string {
 		switch (this.code) {
 			case AuthErrorCode.EMAIL_ALREADY_IN_USE:
@@ -303,9 +242,6 @@ export class FirekitAuthError extends Error {
 		}
 	}
 
-	/**
-	 * Check if error is retryable
-	 */
 	isRetryable(): boolean {
 		const retryableCodes = [
 			AuthErrorCode.NETWORK_REQUEST_FAILED,

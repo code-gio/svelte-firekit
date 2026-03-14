@@ -1,54 +1,24 @@
-/**
- * @fileoverview Presence types and interfaces for FirekitPresence
- * @module PresenceTypes
- * @version 1.0.0
- */
-
-/**
- * Geolocation configuration options
- */
 export interface GeolocationConfig {
-	/** Whether geolocation tracking is enabled */
 	enabled: boolean;
-	/** Type of geolocation service to use */
 	type: 'browser' | 'ip' | 'custom';
-	/** Custom function for retrieving geolocation */
 	customGeolocationFn?: () => Promise<{ latitude: number; longitude: number }>;
-	/** URL for IP-based geolocation service */
 	ipServiceUrl?: string;
-	/** Whether user consent is required for location tracking */
 	requireConsent?: boolean;
-	/** High accuracy GPS tracking */
 	enableHighAccuracy?: boolean;
-	/** Location timeout in milliseconds */
 	timeout?: number;
-	/** Maximum age of cached location in milliseconds */
 	maximumAge?: number;
 }
 
-/**
- * Presence service configuration options
- */
 export interface PresenceConfig {
-	/** Geolocation settings */
 	geolocation?: GeolocationConfig;
-	/** Session timeout in milliseconds (default: 30 minutes) */
 	sessionTTL?: number;
-	/** Presence update interval in milliseconds (default: 1 minute) */
 	updateInterval?: number;
-	/** Custom user metadata to track */
-	customMetadata?: Record<string, any>;
-	/** Whether to track device information */
+	customMetadata?: Record<string, unknown>;
 	trackDeviceInfo?: boolean;
-	/** Custom session collection path in Firebase */
 	sessionPath?: string;
-	/** Whether to enable automatic status detection based on page visibility */
 	enableAutoStatusDetection?: boolean;
 }
 
-/**
- * Location data structure
- */
 export interface Location {
 	latitude: number;
 	longitude: number;
@@ -61,9 +31,6 @@ export interface Location {
 	source: 'browser' | 'ip' | 'custom';
 }
 
-/**
- * Device information structure
- */
 export interface DeviceInfo {
 	id: string;
 	type: 'desktop' | 'mobile' | 'tablet' | 'unknown';
@@ -76,9 +43,6 @@ export interface DeviceInfo {
 	timezone?: string;
 }
 
-/**
- * Session data structure
- */
 export interface SessionData {
 	id: string;
 	userId: string;
@@ -87,14 +51,11 @@ export interface SessionData {
 	lastSeen: string;
 	location?: Location;
 	device?: DeviceInfo;
-	metadata?: Record<string, any>;
+	metadata?: Record<string, unknown>;
 	connectionType?: 'wifi' | 'cellular' | 'ethernet' | 'unknown';
 	lastActivity?: string;
 }
 
-/**
- * User presence summary
- */
 export interface UserPresence {
 	userId: string;
 	status: SessionData['status'];
@@ -105,9 +66,6 @@ export interface UserPresence {
 	location?: Location;
 }
 
-/**
- * Presence statistics
- */
 export interface PresenceStats {
 	totalSessions: number;
 	onlineSessions: number;
@@ -118,9 +76,6 @@ export interface PresenceStats {
 	lastActivity: string;
 }
 
-/**
- * Geolocation provider interface
- */
 export interface GeolocationProvider {
 	getCurrentLocation(): Promise<Location | null>;
 	watchPosition?(callback: (location: Location | null) => void): number;
@@ -128,21 +83,8 @@ export interface GeolocationProvider {
 	requestPermission?(): Promise<boolean>;
 }
 
-/**
- * Session storage interface
- */
-export interface SessionStorage {
-	saveSession(userId: string, session: SessionData): Promise<void>;
-	loadSessions(userId: string): Promise<SessionData[]>;
-	deleteSession(userId: string, sessionId: string): Promise<void>;
-	cleanupExpiredSessions(userId: string, ttl: number): Promise<void>;
-}
-
-/**
- * Presence service interface
- */
 export interface PresenceService {
-	initialize(user: any, config?: PresenceConfig): Promise<void>;
+	initialize(user: unknown, config?: PresenceConfig): Promise<void>;
 	setPresence(status: SessionData['status']): Promise<void>;
 	getCurrentSession(): SessionData | null;
 	getAllSessions(): SessionData[];
@@ -150,98 +92,6 @@ export interface PresenceService {
 	dispose(): Promise<void>;
 }
 
-/**
- * Connection info structure
- */
-export interface ConnectionInfo {
-	effectiveType?: 'slow-2g' | '2g' | '3g' | '4g';
-	type?: 'bluetooth' | 'cellular' | 'ethernet' | 'none' | 'wifi' | 'wimax' | 'other' | 'unknown';
-	downlink?: number;
-	rtt?: number;
-	saveData?: boolean;
-}
-
-/**
- * Browser capability detection
- */
-export interface BrowserCapabilities {
-	geolocation: boolean;
-	notifications: boolean;
-	serviceWorker: boolean;
-	indexedDB: boolean;
-	webRTC: boolean;
-	websockets: boolean;
-	localStorage: boolean;
-}
-
-/**
- * Presence filter options
- */
-export interface PresenceFilter {
-	status?: SessionData['status'][];
-	deviceTypes?: DeviceInfo['type'][];
-	timeRange?: {
-		start: string;
-		end: string;
-	};
-	hasLocation?: boolean;
-	activeOnly?: boolean;
-}
-
-/**
- * Bulk presence update
- */
-export interface BulkPresenceUpdate {
-	userId: string;
-	updates: Partial<SessionData>[];
-	timestamp: string;
-}
-
-/**
- * Presence query options
- */
-export interface PresenceQueryOptions {
-	limit?: number;
-	orderBy?: 'lastSeen' | 'createdAt' | 'status';
-	direction?: 'asc' | 'desc';
-	filter?: PresenceFilter;
-	includeExpired?: boolean;
-}
-
-/**
- * Custom presence status
- */
-export interface CustomPresenceStatus {
-	key: string;
-	label: string;
-	color?: string;
-	icon?: string;
-	priority?: number;
-	autoDetect?: boolean;
-}
-
-/**
- * Presence analytics data
- */
-export interface PresenceAnalytics {
-	userId: string;
-	dailyActiveTime: number;
-	weeklyActiveTime: number;
-	monthlyActiveTime: number;
-	mostActiveDevice: string;
-	mostActiveHour: number;
-	averageSessionLength: number;
-	locationHistory: Location[];
-	statusHistory: Array<{
-		status: SessionData['status'];
-		timestamp: string;
-		duration: number;
-	}>;
-}
-
-/**
- * Error types for presence service
- */
 export enum PresenceErrorCode {
 	INITIALIZATION_FAILED = 'presence/initialization-failed',
 	USER_NOT_AUTHENTICATED = 'presence/user-not-authenticated',
@@ -256,22 +106,16 @@ export enum PresenceErrorCode {
 	PERMISSION_DENIED = 'presence/permission-denied'
 }
 
-/**
- * Custom presence error class
- */
 export class PresenceError extends Error {
 	constructor(
 		public code: PresenceErrorCode,
 		message: string,
-		public originalError?: any
+		public originalError?: unknown
 	) {
 		super(message);
 		this.name = 'PresenceError';
 	}
 
-	/**
-	 * Get user-friendly error message
-	 */
 	getFriendlyMessage(): string {
 		switch (this.code) {
 			case PresenceErrorCode.GEOLOCATION_DENIED:
@@ -293,9 +137,6 @@ export class PresenceError extends Error {
 		}
 	}
 
-	/**
-	 * Check if error is retryable
-	 */
 	isRetryable(): boolean {
 		const retryableCodes = [
 			PresenceErrorCode.NETWORK_ERROR,
@@ -305,9 +146,6 @@ export class PresenceError extends Error {
 		return retryableCodes.includes(this.code);
 	}
 
-	/**
-	 * Check if error requires user action
-	 */
 	requiresUserAction(): boolean {
 		const userActionCodes = [
 			PresenceErrorCode.GEOLOCATION_DENIED,

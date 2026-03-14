@@ -1,101 +1,57 @@
 import type { FirebaseOptions } from 'firebase/app';
-import {
-	PUBLIC_FIREBASE_API_KEY,
-	PUBLIC_FIREBASE_AUTH_DOMAIN,
-	PUBLIC_FIREBASE_PROJECT_ID,
-	PUBLIC_FIREBASE_STORAGE_BUCKET,
-	PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-	PUBLIC_FIREBASE_APP_ID,
-	PUBLIC_FIREBASE_MEASUREMENT_ID
-} from '$env/static/public';
-import { type FirebaseEnvVars, isValidFirebaseConfig } from './types/firebase.js';
-/**
- * @module FirebaseConfig
- */
+import { isValidFirebaseConfig } from './types/firebase.js';
+
+let _config: FirebaseOptions | null = null;
 
 /**
- * Singleton class that manages Firebase configuration.
- * Implements the Singleton pattern to ensure only one Firebase config instance exists.
+ * Initialize Firekit with your Firebase project configuration.
+ * Must be called once before using any Firekit services.
+ *
+ * Works in any Svelte 5 project — no SvelteKit dependency required.
  *
  * @example
- * // Get Firebase configuration
- * const config = FirebaseConfig.getInstance().getConfig();
+ * // Plain Svelte 5
+ * import { initFirekit } from 'svelte-firekit';
+ * initFirekit({ apiKey: '...', authDomain: '...', projectId: '...', ... });
  *
- * // Initialize Firebase app
- * const app = initializeApp(config);
+ * @example
+ * // SvelteKit — call in +layout.ts or a dedicated firebase.ts module
+ * import { initFirekit } from 'svelte-firekit';
+ * import { PUBLIC_FIREBASE_API_KEY, PUBLIC_FIREBASE_PROJECT_ID } from '$env/static/public';
  *
- * @throws {Error} If any required Firebase configuration variables are missing or invalid
+ * initFirekit({
+ *   apiKey: PUBLIC_FIREBASE_API_KEY,
+ *   authDomain: `${PUBLIC_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+ *   projectId: PUBLIC_FIREBASE_PROJECT_ID,
+ *   storageBucket: `${PUBLIC_FIREBASE_PROJECT_ID}.firebasestorage.app`,
+ *   messagingSenderId: PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+ *   appId: PUBLIC_FIREBASE_APP_ID,
+ *   measurementId: PUBLIC_FIREBASE_MEASUREMENT_ID, // optional, needed only for Analytics
+ * });
  */
-class FirebaseConfig {
-	private static instance: FirebaseConfig;
-	private readonly config: FirebaseOptions;
-
-	/**
-	 * Private constructor to prevent direct instantiation.
-	 * Validates all required environment variables are present and creates config.
-	 *
-	 * @private
-	 * @throws {Error} If any required Firebase configuration variables are missing or invalid
-	 */
-	private constructor() {
-		const config = this.getFirebaseConfig();
-		if (!isValidFirebaseConfig(config)) {
-			throw new Error('Invalid Firebase configuration. Please check your environment variables.');
-		}
-
-		this.config = config;
+export function initFirekit(config: FirebaseOptions): void {
+	if (!isValidFirebaseConfig(config)) {
+		throw new Error(
+			'Invalid Firebase configuration. Required: apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId.'
+		);
 	}
-
-	/**
-	 * Gets the Firebase configuration from environment variables.
-	 *
-	 * @private
-	 * @returns {Partial<FirebaseEnvVars>} The Firebase configuration
-	 */
-	private getFirebaseConfig(): Partial<FirebaseEnvVars> {
-		return {
-			apiKey: PUBLIC_FIREBASE_API_KEY,
-			authDomain: PUBLIC_FIREBASE_AUTH_DOMAIN,
-			projectId: PUBLIC_FIREBASE_PROJECT_ID,
-			storageBucket: PUBLIC_FIREBASE_STORAGE_BUCKET,
-			messagingSenderId: PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-			appId: PUBLIC_FIREBASE_APP_ID,
-			measurementId: PUBLIC_FIREBASE_MEASUREMENT_ID
-		};
-	}
-
-	/**
-	 * Gets the singleton instance of FirebaseConfig.
-	 * Creates a new instance if one doesn't exist.
-	 *
-	 * @returns {FirebaseConfig} The singleton FirebaseConfig instance
-	 * @throws {Error} If any required Firebase configuration variables are missing or invalid
-	 */
-	static getInstance(): FirebaseConfig {
-		if (!FirebaseConfig.instance) {
-			FirebaseConfig.instance = new FirebaseConfig();
-		}
-		return FirebaseConfig.instance;
-	}
-
-	/**
-	 * Gets the Firebase configuration options.
-	 *
-	 * @returns {FirebaseOptions} The Firebase configuration options
-	 */
-	getConfig(): FirebaseOptions {
-		return this.config;
-	}
+	_config = config;
 }
 
 /**
- * Pre-initialized Firebase configuration instance.
- * Use this to get Firebase configuration options directly.
- *
- * @example
- * import { firebaseConfig } from './firebase-config';
- * import { initializeApp } from 'firebase/app';
- *
- * const app = initializeApp(firebaseConfig);
+ * Returns the stored Firebase config. Throws if initFirekit() has not been called.
+ * @internal Used by FirebaseService — consumers should use initFirekit() instead.
  */
-export const firebaseConfig = FirebaseConfig.getInstance().getConfig();
+export function getFirekitConfig(): FirebaseOptions {
+	if (!_config) {
+		throw new Error(
+			'Firekit is not configured. Call initFirekit(config) before using any Firekit services.'
+		);
+	}
+	return _config;
+}
+
+/** Returns true if initFirekit() has been called. */
+export function isFirekitConfigured(): boolean {
+	return _config !== null;
+}

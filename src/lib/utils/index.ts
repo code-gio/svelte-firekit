@@ -1,11 +1,4 @@
-// User utilities
-export { mapFirebaseUserToProfile } from './user.js';
-
-// Firestore utilities
-export { updateUserInFirestore } from './firestore.js';
-
-// Error handling utilities
-export { createAuthError, validateCurrentUser, handleAuthError } from './errors.js';
-
-// Provider utilities
-export { createGoogleProvider, createFacebookProvider, createAppleProvider } from './providers.js';
+export * from './errors.js';
+export * from './providers.js';
+export * from './user.js';
+export * from './firestore.js';

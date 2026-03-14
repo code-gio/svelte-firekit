@@ -1,22 +1,21 @@
-/**
- * @fileoverview FirekitAuth - Complete Firebase Authentication Service for Svelte
- * @module FirekitAuth
- * @version 1.0.0
- */
-
 import {
 	EmailAuthProvider,
 	PhoneAuthProvider,
 	RecaptchaVerifier,
+	SAMLAuthProvider,
+	OAuthProvider,
 	signInWithEmailAndPassword,
 	signInWithPopup,
+	signInWithRedirect,
+	getRedirectResult,
+	signInWithCustomToken as firebaseSignInWithCustomToken,
 	signInWithPhoneNumber as firebaseSignInWithPhoneNumber,
 	signInWithCredential,
 	signInAnonymously as firebaseSignInAnonymously,
 	createUserWithEmailAndPassword,
-	signOut,
+	signOut as firebaseSignOut,
 	sendPasswordResetEmail,
-	confirmPasswordReset,
+	confirmPasswordReset as firebaseConfirmPasswordReset,
 	sendEmailVerification,
 	updateProfile,
 	updateEmail,
@@ -25,24 +24,25 @@ import {
 	deleteUser,
 	reload,
 	getIdToken,
-	onAuthStateChanged,
 	getAdditionalUserInfo,
-	type User
+	multiFactor,
+	PhoneMultiFactorGenerator,
+	getMultiFactorResolver,
+	type User,
+	type MultiFactorError,
+	type MultiFactorResolver,
+	type MultiFactorInfo
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { firebaseService } from '../firebase.js';
 import {
 	type UserProfile,
-	type AuthState,
-	type PasswordUpdateResult,
-	type AccountDeletionResult,
-	type PhoneVerificationResult,
 	type SignInResult,
 	type RegistrationResult,
 	type OAuthSignInResult,
-	type ProfileUpdateResult,
-	type EmailVerificationResult,
-	type PasswordResetResult,
+	type PhoneVerificationResult,
+	type PasswordUpdateResult,
+	type AccountDeletionResult,
 	AuthErrorCode,
 	FirekitAuthError
 } from '../types/auth.js';
@@ -52,56 +52,35 @@ import {
 	createGoogleProvider,
 	createFacebookProvider,
 	createAppleProvider,
+	createGithubProvider,
+	createTwitterProvider,
+	createMicrosoftProvider,
 	handleAuthError
 } from '../utils/index.js';
-import { firekitPresence } from './presence.svelte.js';
 
 /**
- * Comprehensive Firebase Authentication service for Svelte applications.
- * Provides a complete authentication solution with automatic Firestore integration,
- * error handling, and support for all major authentication methods.
+ * Firebase Authentication service.
+ * Handles all auth operations — sign in, register, sign out, profile updates.
+ * Reactive state (loading, user, isAuthenticated) lives in `firekitUser`.
  *
- * @class FirekitAuth
  * @example
- * ```typescript
  * import { firekitAuth } from 'svelte-firekit';
- *
- * // Sign in with Google
  * await firekitAuth.signInWithGoogle();
- *
- * // Register new user
- * await firekitAuth.registerWithEmail("user@example.com", "password123", "John Doe");
- *
- * // Listen to auth state changes
- * const unsubscribe = firekitAuth.onAuthStateChanged((user) => {
- *   console.log('User:', user);
- * });
- * ```
+ * await firekitAuth.registerWithEmail('user@example.com', 'password', 'Jane Doe');
+ * await firekitAuth.signOut();
  */
 class FirekitAuth {
 	private static instance: FirekitAuth;
 	private auth: ReturnType<typeof firebaseService.getAuthInstance> | null = null;
 	private firestore: ReturnType<typeof firebaseService.getDbInstance> | null = null;
-	private _servicesInitialized = false;
-	private authState: AuthState = {
-		user: null,
-		loading: true,
-		initialized: false
-	};
-	private stateListeners: Set<(state: AuthState) => void> = new Set();
-	private recaptchaVerifiers: Map<string, RecaptchaVerifier> = new Map();
+	private recaptchaVerifiers = new Map<string, RecaptchaVerifier>();
 
 	private constructor() {
 		if (typeof window !== 'undefined') {
-			// Initialize Firebase services immediately like the old working code
-			this.initializeServices();
+			this.bootstrap();
 		}
 	}
 
-	/**
-	 * Gets singleton instance of FirekitAuth
-	 * @returns {FirekitAuth} The FirekitAuth instance
-	 */
 	static getInstance(): FirekitAuth {
 		if (!FirekitAuth.instance) {
 			FirekitAuth.instance = new FirekitAuth();
@@ -109,984 +88,637 @@ class FirekitAuth {
 		return FirekitAuth.instance;
 	}
 
-	/**
-	 * Initializes Firebase services and auth state listener
-	 * @private
-	 */
-	private initializeServices(): void {
-		if (this._servicesInitialized) return;
-
+	private bootstrap(): void {
 		try {
 			this.auth = firebaseService.getAuthInstance();
-
-			// Try to get Firestore instance, but don't fail if it's not available
 			try {
 				this.firestore = firebaseService.getDbInstance();
-			} catch (firestoreError) {
-				console.warn(
-					'Firestore not available, continuing without Firestore integration:',
-					firestoreError
-				);
+			} catch {
 				this.firestore = null;
 			}
-
-			this._servicesInitialized = true;
-			this.initializeAuthStateListener();
-		} catch (error) {
-			console.error('Failed to initialize Firebase services:', error);
-			this.authState = {
-				user: null,
-				loading: false,
-				initialized: true
-			};
-			this.notifyStateListeners();
+		} catch {
+			// Firebase not yet configured — services will be accessed lazily
 		}
 	}
 
-	/**
-	 * Initializes the authentication state listener
-	 * @private
-	 */
-	private initializeAuthStateListener(): void {
+	private getAuth() {
 		if (!this.auth) {
-			console.error('Auth instance not available');
-			return;
+			this.auth = firebaseService.getAuthInstance();
 		}
-
-		onAuthStateChanged(
-			this.auth,
-			(user) => {
-				this.authState = {
-					user: user ? this.mapFirebaseUserToProfile(user) : null,
-					loading: false,
-					initialized: true
-				};
-				this.notifyStateListeners();
-			},
-			(error) => {
-				console.error('Auth state change error:', error);
-				this.authState = {
-					user: null,
-					loading: false,
-					initialized: true
-				};
-				this.notifyStateListeners();
-			}
-		);
-	}
-
-	/**
-	 * Notifies all state listeners of auth state changes
-	 * @private
-	 */
-	private notifyStateListeners(): void {
-		this.stateListeners.forEach((listener) => listener(this.authState));
-	}
-
-	/**
-	 * Maps Firebase User to UserProfile interface
-	 * @private
-	 */
-	private mapFirebaseUserToProfile(user: User): UserProfile {
-		return mapFirebaseUserToProfile(user);
-	}
-
-	/**
-	 * Updates user data in Firestore with comprehensive profile information
-	 * @private
-	 */
-	private async updateUserInFirestore(user: User): Promise<void> {
-		if (!this.firestore) {
-			console.warn('Firestore not available, skipping user update in Firestore');
-			return;
+		if (!this.auth) {
+			throw new FirekitAuthError('auth/not-initialized', 'Firebase Auth is not initialized.');
 		}
+		return this.auth;
+	}
+
+	private async syncToFirestore(user: User): Promise<void> {
+		if (!this.firestore) return;
 		await updateUserInFirestore(this.firestore, user);
 	}
 
-	/**
-	 * Handles Firebase authentication errors and throws FirekitAuthError
-	 * @private
-	 */
-	private handleAuthError(error: any): never {
-		handleAuthError(error);
+	private profile(user: User): UserProfile {
+		return mapFirebaseUserToProfile(user);
 	}
 
-	/**
-	 * Gets the current authentication state
-	 * @returns {AuthState} Current authentication state
-	 */
-	getState(): AuthState {
-		return { ...this.authState };
-	}
+	// ─── Sign-in ────────────────────────────────────────────────────────────────
 
-	/**
-	 * Gets the current authenticated user
-	 * @returns {User | null} Current Firebase user or null
-	 */
-	getCurrentUser(): User | null {
-		return this.auth?.currentUser ?? null;
-	}
-
-	/**
-	 * Gets the current user profile
-	 * @returns {UserProfile | null} Current user profile or null
-	 */
-	getCurrentUserProfile(): UserProfile | null {
-		return this.authState.user;
-	}
-
-	/**
-	 * Waits for auth initialization to complete
-	 * @returns {Promise<UserProfile | null>} Promise that resolves when auth is initialized
-	 */
-	async waitForAuth(): Promise<UserProfile | null> {
-		return new Promise((resolve) => {
-			if (this.authState.initialized) {
-				resolve(this.authState.user);
-				return;
-			}
-
-			const unsubscribe = this.onAuthStateChanged((state) => {
-				if (state.initialized) {
-					unsubscribe();
-					resolve(state.user);
-				}
-			});
-		});
-	}
-
-	/**
-	 * Subscribes to authentication state changes
-	 * @param {Function} callback Callback function to handle state changes
-	 * @returns {Function} Unsubscribe function
-	 */
-	onAuthStateChanged(callback: (state: AuthState) => void): () => void {
-		this.stateListeners.add(callback);
-
-		// Immediately call with current state
-		callback(this.authState);
-
-		return () => {
-			this.stateListeners.delete(callback);
-		};
-	}
-
-	// ========================================
-	// SIGN IN METHODS
-	// ========================================
-
-	/**
-	 * Signs in user with email and password
-	 * @param {string} email User's email address
-	 * @param {string} password User's password
-	 * @returns {Promise<SignInResult>} Promise resolving to sign-in result
-	 * @throws {FirekitAuthError} If sign-in fails
-	 *
-	 * @example
-	 * ```typescript
-	 * try {
-	 *   const result = await firekitAuth.signInWithEmail("user@example.com", "password123");
-	 *   console.log("Signed in:", result.user.displayName);
-	 *   console.log("Is new user:", result.isNewUser);
-	 * } catch (error) {
-	 *   console.error("Sign-in failed:", error.message);
-	 * }
-	 * ```
-	 */
 	async signInWithEmail(email: string, password: string): Promise<SignInResult> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
-
 		try {
-			this.authState.loading = true;
-			this.notifyStateListeners();
-
-			const userCredential = await signInWithEmailAndPassword(this.auth, email, password);
-			await this.updateUserInFirestore(userCredential.user);
-
-			const userProfile = this.mapFirebaseUserToProfile(userCredential.user);
-			const additionalUserInfo = getAdditionalUserInfo(userCredential);
-			const isNewUser = additionalUserInfo?.isNewUser ?? false;
-
+			const cred = await signInWithEmailAndPassword(this.getAuth(), email, password);
+			await this.syncToFirestore(cred.user);
+			const profile = this.profile(cred.user);
+			const isNewUser = getAdditionalUserInfo(cred)?.isNewUser ?? false;
 			return {
 				success: true,
-				user: userProfile,
+				user: profile,
 				method: 'email',
 				timestamp: new Date(),
 				isNewUser,
-				requiresEmailVerification: !userProfile.emailVerified
+				requiresEmailVerification: !profile.emailVerified
 			};
-		} catch (error: any) {
-			this.handleAuthError(error);
-		} finally {
-			this.authState.loading = false;
-			this.notifyStateListeners();
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Signs in user with Google popup
-	 * @returns {Promise<OAuthSignInResult>} Promise resolving to OAuth sign-in result
-	 * @throws {FirekitAuthError} If sign-in fails
-	 *
-	 * @example
-	 * ```typescript
-	 * try {
-	 *   const result = await firekitAuth.signInWithGoogle();
-	 *   console.log("Signed in with Google:", result.user.email);
-	 *   console.log("Is new user:", result.isNewUser);
-	 *   console.log("Access token:", result.accessToken);
-	 * } catch (error) {
-	 *   if (error.code === 'auth/popup-closed-by-user') {
-	 *     console.log("User cancelled sign-in");
-	 *   }
-	 * }
-	 * ```
-	 */
 	async signInWithGoogle(): Promise<OAuthSignInResult> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
-
-		try {
-			this.authState.loading = true;
-			this.notifyStateListeners();
-
-			const provider = createGoogleProvider();
-
-			const result = await signInWithPopup(this.auth, provider);
-			await this.updateUserInFirestore(result.user);
-
-			const userProfile = this.mapFirebaseUserToProfile(result.user);
-			const additionalUserInfo = getAdditionalUserInfo(result);
-			const isNewUser = additionalUserInfo?.isNewUser ?? false;
-
-			return {
-				success: true,
-				user: userProfile,
-				method: 'google',
-				timestamp: new Date(),
-				isNewUser,
-				provider: 'google'
-			};
-		} catch (error: any) {
-			this.handleAuthError(error);
-		} finally {
-			this.authState.loading = false;
-			this.notifyStateListeners();
-		}
+		return this.signInWithOAuth('google', createGoogleProvider());
 	}
 
-	/**
-	 * Signs in user with Facebook popup
-	 * @returns {Promise<OAuthSignInResult>} Promise resolving to OAuth sign-in result
-	 * @throws {FirekitAuthError} If sign-in fails
-	 */
 	async signInWithFacebook(): Promise<OAuthSignInResult> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
-
-		try {
-			this.authState.loading = true;
-			this.notifyStateListeners();
-
-			const provider = createFacebookProvider();
-
-			const result = await signInWithPopup(this.auth, provider);
-			await this.updateUserInFirestore(result.user);
-
-			const userProfile = this.mapFirebaseUserToProfile(result.user);
-			const additionalUserInfo = getAdditionalUserInfo(result);
-			const isNewUser = additionalUserInfo?.isNewUser ?? false;
-
-			return {
-				success: true,
-				user: userProfile,
-				method: 'facebook',
-				timestamp: new Date(),
-				isNewUser,
-				provider: 'facebook'
-			};
-		} catch (error: any) {
-			this.handleAuthError(error);
-		} finally {
-			this.authState.loading = false;
-			this.notifyStateListeners();
-		}
+		return this.signInWithOAuth('facebook', createFacebookProvider());
 	}
 
-	/**
-	 * Signs in user with Apple popup
-	 * @returns {Promise<OAuthSignInResult>} Promise resolving to OAuth sign-in result
-	 * @throws {FirekitAuthError} If sign-in fails
-	 */
 	async signInWithApple(): Promise<OAuthSignInResult> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
+		return this.signInWithOAuth('apple', createAppleProvider());
+	}
 
+	async signInWithGithub(): Promise<OAuthSignInResult> {
+		return this.signInWithOAuth('github', createGithubProvider());
+	}
+
+	async signInWithTwitter(): Promise<OAuthSignInResult> {
+		return this.signInWithOAuth('twitter', createTwitterProvider());
+	}
+
+	async signInWithMicrosoft(): Promise<OAuthSignInResult> {
+		return this.signInWithOAuth('microsoft', createMicrosoftProvider());
+	}
+
+	private async signInWithOAuth(
+		provider: OAuthSignInResult['provider'],
+		providerInstance: Parameters<typeof signInWithPopup>[1]
+	): Promise<OAuthSignInResult> {
 		try {
-			this.authState.loading = true;
-			this.notifyStateListeners();
-
-			const provider = createAppleProvider();
-
-			const result = await signInWithPopup(this.auth, provider);
-			await this.updateUserInFirestore(result.user);
-
-			const userProfile = this.mapFirebaseUserToProfile(result.user);
-			const additionalUserInfo = getAdditionalUserInfo(result);
-			const isNewUser = additionalUserInfo?.isNewUser ?? false;
-
+			const result = await signInWithPopup(this.getAuth(), providerInstance);
+			await this.syncToFirestore(result.user);
+			const profile = this.profile(result.user);
+			const isNewUser = getAdditionalUserInfo(result)?.isNewUser ?? false;
 			return {
 				success: true,
-				user: userProfile,
-				method: 'apple',
+				user: profile,
+				method: provider,
 				timestamp: new Date(),
 				isNewUser,
-				provider: 'apple'
+				provider
 			};
-		} catch (error: any) {
-			this.handleAuthError(error);
-		} finally {
-			this.authState.loading = false;
-			this.notifyStateListeners();
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Signs in user anonymously
-	 * @returns {Promise<SignInResult>} Promise resolving to sign-in result
-	 * @throws {FirekitAuthError} If sign-in fails
-	 *
-	 * @example
-	 * ```typescript
-	 * const result = await firekitAuth.signInAnonymously();
-	 * console.log("Anonymous user:", result.user.uid);
-	 * console.log("Is new user:", result.isNewUser);
-	 * ```
-	 */
 	async signInAnonymously(): Promise<SignInResult> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
-
 		try {
-			this.authState.loading = true;
-			this.notifyStateListeners();
-
-			const result = await firebaseSignInAnonymously(this.auth);
-			await this.updateUserInFirestore(result.user);
-
-			const userProfile = this.mapFirebaseUserToProfile(result.user);
-			const additionalUserInfo = getAdditionalUserInfo(result);
-			const isNewUser = additionalUserInfo?.isNewUser ?? false;
-
+			const result = await firebaseSignInAnonymously(this.getAuth());
+			await this.syncToFirestore(result.user);
+			const profile = this.profile(result.user);
+			const isNewUser = getAdditionalUserInfo(result)?.isNewUser ?? false;
 			return {
 				success: true,
-				user: userProfile,
+				user: profile,
 				method: 'anonymous',
 				timestamp: new Date(),
 				isNewUser
 			};
-		} catch (error: any) {
-			this.handleAuthError(error);
-		} finally {
-			this.authState.loading = false;
-			this.notifyStateListeners();
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Initiates phone number sign-in process
-	 * @param {string} phoneNumber Phone number in international format
-	 * @param {string} recaptchaContainerId ID of the reCAPTCHA container element
-	 * @returns {Promise<PhoneVerificationResult>} Promise resolving to verification result
-	 * @throws {FirekitAuthError} If verification initiation fails
-	 *
-	 * @example
-	 * ```typescript
-	 * const verification = await firekitAuth.signInWithPhoneNumber("+1234567890", "recaptcha-container");
-	 * const user = await verification.confirm("123456");
-	 * ```
-	 */
 	async signInWithPhoneNumber(
 		phoneNumber: string,
 		recaptchaContainerId: string
 	): Promise<PhoneVerificationResult> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
+		const auth = this.getAuth();
 
 		try {
-			this.authState.loading = true;
-			this.notifyStateListeners();
-
-			// Clean up existing verifier if any
-			const existingVerifier = this.recaptchaVerifiers.get(recaptchaContainerId);
-			if (existingVerifier) {
-				existingVerifier.clear();
+			// Reuse or create the reCAPTCHA verifier for this container
+			const existing = this.recaptchaVerifiers.get(recaptchaContainerId);
+			if (existing) {
+				existing.clear();
 				this.recaptchaVerifiers.delete(recaptchaContainerId);
 			}
 
-			const recaptchaVerifier = new RecaptchaVerifier(this.auth, recaptchaContainerId, {
-				size: 'normal',
-				callback: () => {
-					console.log('reCAPTCHA solved');
-				},
-				'expired-callback': () => {
-					console.log('reCAPTCHA expired');
-				}
-			});
+			const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, { size: 'normal' });
+			this.recaptchaVerifiers.set(recaptchaContainerId, verifier);
 
-			this.recaptchaVerifiers.set(recaptchaContainerId, recaptchaVerifier);
-
-			const confirmationResult = await firebaseSignInWithPhoneNumber(
-				this.auth,
-				phoneNumber,
-				recaptchaVerifier
-			);
+			const confirmation = await firebaseSignInWithPhoneNumber(auth, phoneNumber, verifier);
 
 			return {
-				verificationId: confirmationResult.verificationId,
-				confirm: async (verificationCode: string): Promise<SignInResult> => {
+				verificationId: confirmation.verificationId,
+				confirm: async (code: string): Promise<SignInResult> => {
 					try {
-						const userCredential = await confirmationResult.confirm(verificationCode);
-						await this.updateUserInFirestore(userCredential.user);
-
-						const userProfile = this.mapFirebaseUserToProfile(userCredential.user);
-						const additionalUserInfo = getAdditionalUserInfo(userCredential);
-						const isNewUser = additionalUserInfo?.isNewUser ?? false;
-
+						const cred = await confirmation.confirm(code);
+						await this.syncToFirestore(cred.user);
+						const profile = this.profile(cred.user);
+						const isNewUser = getAdditionalUserInfo(cred)?.isNewUser ?? false;
 						return {
 							success: true,
-							user: userProfile,
+							user: profile,
 							method: 'phone',
 							timestamp: new Date(),
 							isNewUser
 						};
-					} catch (error: any) {
-						this.handleAuthError(error);
+					} catch (error) {
+						handleAuthError(error);
 					} finally {
-						// Clean up verifier after use
-						recaptchaVerifier.clear();
+						verifier.clear();
 						this.recaptchaVerifiers.delete(recaptchaContainerId);
 					}
 				}
 			};
-		} catch (error: any) {
-			this.handleAuthError(error);
-		} finally {
-			this.authState.loading = false;
-			this.notifyStateListeners();
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	// ========================================
-	// REGISTRATION METHODS
-	// ========================================
+	// ─── Registration ────────────────────────────────────────────────────────────
 
-	/**
-	 * Registers new user with email and password
-	 * @param {string} email User's email address
-	 * @param {string} password User's password
-	 * @param {string} [displayName] User's display name
-	 * @param {boolean} [sendVerification=true] Whether to send email verification
-	 * @returns {Promise<RegistrationResult>} Promise resolving to registration result
-	 * @throws {FirekitAuthError} If registration fails
-	 *
-	 * @example
-	 * ```typescript
-	 * const result = await firekitAuth.registerWithEmail(
-	 *   "user@example.com",
-	 *   "password123",
-	 *   "John Doe"
-	 * );
-	 * console.log("Registered:", result.user.displayName);
-	 * console.log("Email verification sent:", result.emailVerificationSent);
-	 * ```
-	 */
 	async registerWithEmail(
 		email: string,
 		password: string,
 		displayName?: string,
-		sendVerification: boolean = true
+		sendVerification = true
 	): Promise<RegistrationResult> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
-
 		try {
-			this.authState.loading = true;
-			this.notifyStateListeners();
+			const cred = await createUserWithEmailAndPassword(this.getAuth(), email, password);
+			const { user } = cred;
 
-			const userCredential = await createUserWithEmailAndPassword(this.auth, email, password);
-			const user = userCredential.user;
+			if (displayName) await updateProfile(user, { displayName });
+			if (sendVerification) await sendEmailVerification(user);
 
-			// Update profile if displayName provided
-			if (displayName) {
-				await updateProfile(user, { displayName });
-			}
-
-			// Send email verification
-			if (sendVerification) {
-				await sendEmailVerification(user);
-			}
-
-			await this.updateUserInFirestore(user);
-
-			const userProfile = this.mapFirebaseUserToProfile(user);
+			await this.syncToFirestore(user);
+			const profile = this.profile(user);
 
 			return {
 				success: true,
-				user: userProfile,
+				user: profile,
 				method: 'email',
 				timestamp: new Date(),
 				emailVerificationSent: sendVerification,
-				requiresEmailVerification: !userProfile.emailVerified
+				requiresEmailVerification: !profile.emailVerified
 			};
-		} catch (error: any) {
-			this.handleAuthError(error);
-		} finally {
-			this.authState.loading = false;
-			this.notifyStateListeners();
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	// ========================================
-	// PASSWORD METHODS
-	// ========================================
+	// ─── Sign-out ────────────────────────────────────────────────────────────────
 
-	/**
-	 * Sends password reset email
-	 * @param {string} email User's email address
-	 * @returns {Promise<void>} Promise that resolves when email is sent
-	 * @throws {FirekitAuthError} If sending fails
-	 *
-	 * @example
-	 * ```typescript
-	 * await firekitAuth.sendPasswordReset("user@example.com");
-	 * console.log("Password reset email sent");
-	 * ```
-	 */
+	async signOut(): Promise<void> {
+		try {
+			this.recaptchaVerifiers.forEach((v) => v.clear());
+			this.recaptchaVerifiers.clear();
+			await firebaseSignOut(this.getAuth());
+		} catch (error) {
+			handleAuthError(error);
+		}
+	}
+
+	// ─── Password ────────────────────────────────────────────────────────────────
+
 	async sendPasswordReset(email: string): Promise<void> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
-
 		try {
-			await sendPasswordResetEmail(this.auth, email);
-		} catch (error: any) {
-			this.handleAuthError(error);
+			await sendPasswordResetEmail(this.getAuth(), email);
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Confirms password reset with code
-	 * @param {string} code Password reset code from email
-	 * @param {string} newPassword New password
-	 * @returns {Promise<void>} Promise that resolves when password is reset
-	 * @throws {FirekitAuthError} If reset fails
-	 */
 	async confirmPasswordReset(code: string, newPassword: string): Promise<void> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
-
 		try {
-			await confirmPasswordReset(this.auth, code, newPassword);
-		} catch (error: any) {
-			this.handleAuthError(error);
+			await firebaseConfirmPasswordReset(this.getAuth(), code, newPassword);
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Updates user password with reauthentication
-	 * @param {string} newPassword New password
-	 * @param {string} currentPassword Current password for reauthentication
-	 * @returns {Promise<PasswordUpdateResult>} Promise resolving to update result
-	 *
-	 * @example
-	 * ```typescript
-	 * const result = await firekitAuth.updatePassword("newPassword123", "oldPassword123");
-	 * if (result.success) {
-	 *   console.log("Password updated successfully");
-	 * } else {
-	 *   console.error("Update failed:", result.message);
-	 * }
-	 * ```
-	 */
 	async updatePassword(
 		newPassword: string,
 		currentPassword: string
 	): Promise<PasswordUpdateResult> {
-		if (!this.auth?.currentUser) {
-			return {
-				success: false,
-				message: 'No authenticated user found.',
-				code: 'auth/no-current-user'
-			};
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
+			return { success: false, message: 'No authenticated user found.', code: 'auth/no-current-user' };
 		}
 
 		try {
-			await this.reauthenticateUser(currentPassword);
-			await updatePassword(this.auth.currentUser, newPassword);
-
-			return {
-				success: true,
-				message: 'Password successfully updated.'
-			};
-		} catch (error: any) {
-			const code = error.code as AuthErrorCode;
-
-			if (code === AuthErrorCode.WRONG_PASSWORD) {
-				return {
-					success: false,
-					code,
-					message: 'Current password is incorrect.'
-				};
-			}
-
+			await this.reauthenticate(currentPassword);
+			await updatePassword(auth.currentUser, newPassword);
+			return { success: true, message: 'Password successfully updated.' };
+		} catch (error) {
+			const err = error as { code?: string; message?: string };
+			const code = err.code as AuthErrorCode;
 			return {
 				success: false,
-				code: code || 'unknown_error',
-				message: error.message || 'Failed to update password.'
+				code: code || 'unknown',
+				message:
+					code === AuthErrorCode.WRONG_PASSWORD
+						? 'Current password is incorrect.'
+						: (err.message ?? 'Failed to update password.')
 			};
 		}
 	}
 
-	// ========================================
-	// PROFILE METHODS
-	// ========================================
+	// ─── Profile ─────────────────────────────────────────────────────────────────
 
-	/**
-	 * Updates user profile
-	 * @param {Object} profile Profile update data
-	 * @param {string} [profile.displayName] New display name
-	 * @param {string} [profile.photoURL] New photo URL
-	 * @returns {Promise<void>} Promise that resolves when profile is updated
-	 * @throws {FirekitAuthError} If update fails
-	 *
-	 * @example
-	 * ```typescript
-	 * await firekitAuth.updateUserProfile({
-	 *   displayName: "John Smith",
-	 *   photoURL: "https://example.com/photo.jpg"
-	 * });
-	 * ```
-	 */
 	async updateUserProfile(profile: { displayName?: string; photoURL?: string }): Promise<void> {
-		if (!this.auth?.currentUser) {
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
-
 		try {
-			await updateProfile(this.auth.currentUser, profile);
-			await this.updateUserInFirestore(this.auth.currentUser);
-		} catch (error: any) {
-			this.handleAuthError(error);
+			await updateProfile(auth.currentUser, profile);
+			await this.syncToFirestore(auth.currentUser);
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Updates user email address
-	 * @param {string} newEmail New email address
-	 * @returns {Promise<void>} Promise that resolves when email is updated
-	 * @throws {FirekitAuthError} If update fails
-	 *
-	 * @example
-	 * ```typescript
-	 * await firekitAuth.updateEmail("newemail@example.com");
-	 * ```
-	 */
 	async updateEmail(newEmail: string): Promise<void> {
-		if (!this.auth?.currentUser) {
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
-
 		try {
-			await updateEmail(this.auth.currentUser, newEmail);
-			await this.updateUserInFirestore(this.auth.currentUser);
-		} catch (error: any) {
-			this.handleAuthError(error);
+			await updateEmail(auth.currentUser, newEmail);
+			await this.syncToFirestore(auth.currentUser);
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Sends email verification to current user
-	 * @returns {Promise<void>} Promise that resolves when verification email is sent
-	 * @throws {FirekitAuthError} If sending fails
-	 *
-	 * @example
-	 * ```typescript
-	 * await firekitAuth.sendEmailVerification();
-	 * ```
-	 */
 	async sendEmailVerification(): Promise<void> {
-		if (!this.auth?.currentUser) {
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
-
 		try {
-			await sendEmailVerification(this.auth.currentUser);
-		} catch (error: any) {
-			this.handleAuthError(error);
+			await sendEmailVerification(auth.currentUser);
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Reloads user to get updated data
-	 * @returns {Promise<void>} Promise that resolves when user is reloaded
-	 * @throws {FirekitAuthError} If reload fails
-	 *
-	 * @example
-	 * ```typescript
-	 * await firekitAuth.reloadUser();
-	 * ```
-	 */
 	async reloadUser(): Promise<void> {
-		if (!this.auth?.currentUser) {
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
-
 		try {
-			await reload(this.auth.currentUser);
-			await this.updateUserInFirestore(this.auth.currentUser);
-		} catch (error: any) {
-			this.handleAuthError(error);
+			await reload(auth.currentUser);
+			await this.syncToFirestore(auth.currentUser);
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Gets the current user's ID token
-	 * @param {boolean} [forceRefresh=false] Whether to force token refresh
-	 * @returns {Promise<string>} Promise resolving to ID token
-	 * @throws {FirekitAuthError} If getting token fails
-	 *
-	 * @example
-	 * ```typescript
-	 * const token = await firekitAuth.getIdToken();
-	 * ```
-	 */
-	async getIdToken(forceRefresh: boolean = false): Promise<string> {
-		if (!this.auth?.currentUser) {
+	async getIdToken(forceRefresh = false): Promise<string> {
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
 			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
 		}
-
 		try {
-			return await getIdToken(this.auth.currentUser, forceRefresh);
-		} catch (error: any) {
-			this.handleAuthError(error);
+			return await getIdToken(auth.currentUser, forceRefresh);
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Reauthenticates user with current password
-	 * @private
-	 */
-	private async reauthenticateUser(currentPassword: string): Promise<void> {
-		if (!this.auth?.currentUser || !this.auth.currentUser.email) {
-			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user with email found.');
-		}
+	// ─── Account deletion ────────────────────────────────────────────────────────
 
-		try {
-			const credential = EmailAuthProvider.credential(this.auth.currentUser.email, currentPassword);
-			await reauthenticateWithCredential(this.auth.currentUser, credential);
-		} catch (error: any) {
-			this.handleAuthError(error);
-		}
-	}
-
-	/**
-	 * Deletes user account
-	 * @param {string} [currentPassword] Current password for reauthentication
-	 * @returns {Promise<AccountDeletionResult>} Promise resolving to deletion result
-	 *
-	 * @example
-	 * ```typescript
-	 * const result = await firekitAuth.deleteAccount("currentPassword123");
-	 * if (result.success) {
-	 *   console.log("Account deleted successfully");
-	 * } else {
-	 *   console.error("Deletion failed:", result.message);
-	 * }
-	 * ```
-	 */
 	async deleteAccount(currentPassword?: string): Promise<AccountDeletionResult> {
-		if (!this.auth?.currentUser) {
-			return {
-				success: false,
-				message: 'No authenticated user found.'
-			};
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
+			return { success: false, message: 'No authenticated user found.' };
 		}
 
 		try {
-			const user = this.auth.currentUser;
+			const user = auth.currentUser;
 
-			// Reauthenticate if password provided
-			if (currentPassword) {
-				await this.reauthenticateUser(currentPassword);
-			}
+			if (currentPassword) await this.reauthenticate(currentPassword);
 
-			// Delete user data from Firestore first (if available)
+			// Soft-delete record in Firestore before removing auth
 			if (this.firestore) {
 				try {
-					const userRef = doc(this.firestore, 'users', user.uid);
-					await setDoc(userRef, { deleted: true, deletedAt: serverTimestamp() }, { merge: true });
-				} catch (firestoreError) {
-					console.warn('Failed to update Firestore before account deletion:', firestoreError);
+					await setDoc(
+						doc(this.firestore, 'users', user.uid),
+						{ deleted: true, deletedAt: serverTimestamp() },
+						{ merge: true }
+					);
+				} catch {
+					// Non-blocking
 				}
 			}
 
-			// Delete the user account
 			await deleteUser(user);
+			return { success: true, message: 'Account successfully deleted.' };
+		} catch (error) {
+			const err = error as { message?: string };
+			return { success: false, message: err.message ?? 'Failed to delete account.' };
+		}
+	}
 
+	// ─── Reauthentication ────────────────────────────────────────────────────────
+
+	async reauthenticate(currentPassword: string): Promise<void> {
+		const auth = this.getAuth();
+		if (!auth.currentUser?.email) {
+			throw new FirekitAuthError(
+				'auth/no-current-user',
+				'No authenticated user with email found.'
+			);
+		}
+		try {
+			const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+			await reauthenticateWithCredential(auth.currentUser, credential);
+		} catch (error) {
+			handleAuthError(error);
+		}
+	}
+
+	// ─── Custom token ────────────────────────────────────────────────────────────
+
+	async signInWithCustomToken(token: string): Promise<SignInResult> {
+		try {
+			const cred = await firebaseSignInWithCustomToken(this.getAuth(), token);
+			await this.syncToFirestore(cred.user);
+			const profile = this.profile(cred.user);
+			const isNewUser = getAdditionalUserInfo(cred)?.isNewUser ?? false;
 			return {
 				success: true,
-				message: 'Account successfully deleted.'
+				user: profile,
+				method: 'custom',
+				timestamp: new Date(),
+				isNewUser
 			};
-		} catch (error: any) {
-			return {
-				success: false,
-				message: error.message || 'Failed to delete account.'
-			};
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	/**
-	 * Signs out the current user
-	 * @returns {Promise<void>} Promise that resolves when sign-out completes
-	 * @throws {FirekitAuthError} If sign-out fails
-	 *
-	 * @example
-	 * ```typescript
-	 * await firekitAuth.signOut();
-	 * console.log("User signed out");
-	 * ```
-	 */
-	async signOut(): Promise<void> {
-		if (!this.auth) {
-			throw new Error('Auth instance not available');
-		}
+	// ─── SAML / OIDC ─────────────────────────────────────────────────────────────
 
+	/** Signs in with a SAML provider (popup). */
+	async signInWithSAML(providerId: string): Promise<OAuthSignInResult> {
+		return this.signInWithOAuth('saml', new SAMLAuthProvider(providerId));
+	}
+
+	/** Signs in with a SAML provider (redirect). Pair with `getRedirectResult()` on load. */
+	async signInWithSAMLRedirect(providerId: string): Promise<void> {
+		await signInWithRedirect(this.getAuth(), new SAMLAuthProvider(providerId));
+	}
+
+	/**
+	 * Signs in with a generic OIDC/OAuth2 provider (popup).
+	 * @param providerId  Firebase provider ID, e.g. `'oidc.my-provider'`
+	 * @param scopes      Additional OAuth scopes to request.
+	 */
+	async signInWithOIDC(providerId: string, scopes: string[] = []): Promise<OAuthSignInResult> {
+		const provider = new OAuthProvider(providerId);
+		scopes.forEach((s) => provider.addScope(s));
+		return this.signInWithOAuth('oidc', provider);
+	}
+
+	/** Signs in with a generic OIDC/OAuth2 provider (redirect). Pair with `getRedirectResult()` on load. */
+	async signInWithOIDCRedirect(providerId: string, scopes: string[] = []): Promise<void> {
+		const provider = new OAuthProvider(providerId);
+		scopes.forEach((s) => provider.addScope(s));
+		await signInWithRedirect(this.getAuth(), provider);
+	}
+
+	// ─── Redirect sign-in ────────────────────────────────────────────────────────
+
+	async signInWithGoogleRedirect(): Promise<void> {
+		await signInWithRedirect(this.getAuth(), createGoogleProvider());
+	}
+
+	async signInWithFacebookRedirect(): Promise<void> {
+		await signInWithRedirect(this.getAuth(), createFacebookProvider());
+	}
+
+	async signInWithAppleRedirect(): Promise<void> {
+		await signInWithRedirect(this.getAuth(), createAppleProvider());
+	}
+
+	async signInWithGithubRedirect(): Promise<void> {
+		await signInWithRedirect(this.getAuth(), createGithubProvider());
+	}
+
+	async signInWithTwitterRedirect(): Promise<void> {
+		await signInWithRedirect(this.getAuth(), createTwitterProvider());
+	}
+
+	async signInWithMicrosoftRedirect(): Promise<void> {
+		await signInWithRedirect(this.getAuth(), createMicrosoftProvider());
+	}
+
+	/**
+	 * Completes a redirect sign-in flow.
+	 * Call this once on app load to pick up the result of a `signInWith*Redirect()` call.
+	 * Returns null if no redirect sign-in is pending.
+	 */
+	async getRedirectResult(): Promise<OAuthSignInResult | null> {
+		// Firebase returns provider IDs in the form 'google.com', 'github.com', etc.
+		// Map them to our OAuthProviderType format.
+		const PROVIDER_ID_MAP: Record<string, OAuthSignInResult['provider']> = {
+			'google.com': 'google',
+			'facebook.com': 'facebook',
+			'apple.com': 'apple',
+			'microsoft.com': 'microsoft',
+			'github.com': 'github',
+			'twitter.com': 'twitter'
+		};
 		try {
-			// Set presence offline before signing out
-			try {
-				if (firekitPresence.initialized) {
-					await firekitPresence.setPresence('offline');
-				}
-			} catch (presenceError) {
-				console.warn('Failed to set presence offline during sign out:', presenceError);
-			}
-
-			// Clear reCAPTCHA verifiers
-			this.recaptchaVerifiers.forEach((verifier) => verifier.clear());
-			this.recaptchaVerifiers.clear();
-
-			await signOut(this.auth);
-		} catch (error: any) {
-			this.handleAuthError(error);
+			const result = await getRedirectResult(this.getAuth());
+			if (!result) return null;
+			await this.syncToFirestore(result.user);
+			const profile = this.profile(result.user);
+			const isNewUser = getAdditionalUserInfo(result)?.isNewUser ?? false;
+			const rawId = result.providerId ?? '';
+			const provider: OAuthSignInResult['provider'] =
+				PROVIDER_ID_MAP[rawId] ??
+				(rawId.startsWith('saml.') ? 'saml' : rawId.startsWith('oidc.') ? 'oidc' : 'google');
+			return {
+				success: true,
+				user: profile,
+				method: provider,
+				timestamp: new Date(),
+				isNewUser,
+				provider
+			};
+		} catch (error) {
+			handleAuthError(error);
 		}
 	}
 
-	// ========================================
-	// UTILITY METHODS
-	// ========================================
+	// ─── Multi-factor authentication ─────────────────────────────────────────────
 
 	/**
-	 * Checks if user is authenticated
-	 * @returns {boolean} True if user is authenticated
+	 * Starts phone MFA enrollment for the currently signed-in user.
+	 * Returns a `verificationId` to pass to `completeMFAEnrollment()`.
 	 */
+	async startPhoneMFAEnrollment(
+		phoneNumber: string,
+		recaptchaContainerId: string
+	): Promise<string> {
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
+			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
+		}
+		const existing = this.recaptchaVerifiers.get(recaptchaContainerId);
+		if (existing) {
+			existing.clear();
+			this.recaptchaVerifiers.delete(recaptchaContainerId);
+		}
+		const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, { size: 'invisible' });
+		this.recaptchaVerifiers.set(recaptchaContainerId, verifier);
+
+		const mfaUser = multiFactor(auth.currentUser);
+		const session = await mfaUser.getSession();
+		const phoneProvider = new PhoneAuthProvider(auth);
+		return phoneProvider.verifyPhoneNumber({ phoneNumber, session }, verifier);
+	}
+
+	/**
+	 * Completes phone MFA enrollment using the SMS code.
+	 */
+	async completeMFAEnrollment(
+		verificationId: string,
+		code: string,
+		displayName?: string
+	): Promise<void> {
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
+			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
+		}
+		const credential = PhoneAuthProvider.credential(verificationId, code);
+		const assertion = PhoneMultiFactorGenerator.assertion(credential);
+		await multiFactor(auth.currentUser).enroll(assertion, displayName);
+	}
+
+	/** Returns all enrolled MFA factors for the currently signed-in user. */
+	getMFAEnrolledFactors(): MultiFactorInfo[] {
+		const auth = this.getAuth();
+		if (!auth.currentUser) return [];
+		return multiFactor(auth.currentUser).enrolledFactors;
+	}
+
+	/** Unenrolls a specific MFA factor by its UID or `MultiFactorInfo` object. */
+	async unenrollMFA(factorUidOrInfo: string | MultiFactorInfo): Promise<void> {
+		const auth = this.getAuth();
+		if (!auth.currentUser) {
+			throw new FirekitAuthError('auth/no-current-user', 'No authenticated user found.');
+		}
+		await multiFactor(auth.currentUser).unenroll(factorUidOrInfo);
+	}
+
+	/**
+	 * Gets the `MultiFactorResolver` from a sign-in error that requires MFA.
+	 * Catch this error from any `signIn*` method when MFA is required.
+	 */
+	getMFAResolver(error: MultiFactorError): MultiFactorResolver {
+		return getMultiFactorResolver(this.getAuth(), error);
+	}
+
+	/**
+	 * Sends an SMS code to complete an MFA sign-in challenge.
+	 * Returns a `verificationId` to pass to `completeMFASignIn()`.
+	 *
+	 * @param resolver       From `getMFAResolver(error)`.
+	 * @param factorIndex    Index into `resolver.hints` (default 0).
+	 * @param recaptchaContainerId  DOM container ID for reCAPTCHA (required for phone MFA).
+	 */
+	async startMFASignIn(
+		resolver: MultiFactorResolver,
+		factorIndex = 0,
+		recaptchaContainerId: string
+	): Promise<string> {
+		const auth = this.getAuth();
+		const existing = this.recaptchaVerifiers.get(recaptchaContainerId);
+		if (existing) {
+			existing.clear();
+			this.recaptchaVerifiers.delete(recaptchaContainerId);
+		}
+		const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, { size: 'invisible' });
+		this.recaptchaVerifiers.set(recaptchaContainerId, verifier);
+
+		const hint = resolver.hints[factorIndex];
+		const phoneProvider = new PhoneAuthProvider(auth);
+		return phoneProvider.verifyPhoneNumber(
+			{ multiFactorHint: hint, session: resolver.session },
+			verifier
+		);
+	}
+
+	/**
+	 * Completes MFA sign-in using the SMS code.
+	 */
+	async completeMFASignIn(
+		resolver: MultiFactorResolver,
+		verificationId: string,
+		code: string
+	): Promise<SignInResult> {
+		const credential = PhoneAuthProvider.credential(verificationId, code);
+		const assertion = PhoneMultiFactorGenerator.assertion(credential);
+		try {
+			const cred = await resolver.resolveSignIn(assertion);
+			await this.syncToFirestore(cred.user);
+			const profile = this.profile(cred.user);
+			return {
+				success: true,
+				user: profile,
+				method: 'phone',
+				timestamp: new Date(),
+				isNewUser: false
+			};
+		} catch (error) {
+			handleAuthError(error);
+		}
+	}
+
+	// ─── Utility getters ─────────────────────────────────────────────────────────
+
+	getCurrentUser(): User | null {
+		return this.auth?.currentUser ?? null;
+	}
+
 	isAuthenticated(): boolean {
-		return this.authState.user !== null && !this.authState.user.isAnonymous;
+		return this.auth?.currentUser !== null && !this.auth?.currentUser?.isAnonymous;
 	}
 
-	/**
-	 * Checks if user is anonymous
-	 * @returns {boolean} True if user is anonymous
-	 */
 	isAnonymous(): boolean {
-		return this.authState.user?.isAnonymous ?? false;
+		return this.auth?.currentUser?.isAnonymous ?? false;
 	}
 
-	/**
-	 * Checks if user's email is verified
-	 * @returns {boolean} True if email is verified
-	 */
 	isEmailVerified(): boolean {
-		return this.authState.user?.emailVerified ?? false;
+		return this.auth?.currentUser?.emailVerified ?? false;
 	}
 
-	/**
-	 * Gets user's email address
-	 * @returns {string | null} User's email or null
-	 */
-	getUserEmail(): string | null {
-		return this.authState.user?.email ?? null;
-	}
-
-	/**
-	 * Gets user's display name
-	 * @returns {string | null} User's display name or null
-	 */
-	getUserDisplayName(): string | null {
-		return this.authState.user?.displayName ?? null;
-	}
-
-	/**
-	 * Gets user's photo URL
-	 * @returns {string | null} User's photo URL or null
-	 */
-	getUserPhotoURL(): string | null {
-		return this.authState.user?.photoURL ?? null;
-	}
-
-	/**
-	 * Gets user's unique ID
-	 * @returns {string | null} User's UID or null
-	 */
-	getUserId(): string | null {
-		return this.authState.user?.uid ?? null;
-	}
-
-	/**
-	 * Cleans up resources and listeners
-	 * @returns {Promise<void>} Promise that resolves when cleanup completes
-	 */
 	async cleanup(): Promise<void> {
-		// Clear reCAPTCHA verifiers
-		this.recaptchaVerifiers.forEach((verifier) => verifier.clear());
+		this.recaptchaVerifiers.forEach((v) => v.clear());
 		this.recaptchaVerifiers.clear();
-
-		// Clear state listeners
-		this.stateListeners.clear();
 	}
 }
 
-/**
- * Pre-initialized singleton instance of FirekitAuth.
- * This is the main export that should be used throughout your application.
- *
- * @example
- * ```typescript
- * import { firekitAuth } from 'svelte-firekit';
- *
- * // Sign in with email
- * await firekitAuth.signInWithEmail("user@example.com", "password");
- *
- * // Listen to auth state
- * const unsubscribe = firekitAuth.onAuthStateChanged((state) => {
- *   if (state.user) {
- *     console.log("User is signed in:", state.user.email);
- *   } else {
- *     console.log("User is signed out");
- *   }
- * });
- *
- * // Clean up listener
- * unsubscribe();
- * ```
- */
 export const firekitAuth = FirekitAuth.getInstance();
