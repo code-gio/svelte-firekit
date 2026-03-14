@@ -1,6 +1,6 @@
 {
 	"name": "svelte-firekit",
-	"version": "0.2.0",
+	"version": "0.2.2",
 	"description": "A Svelte library for Firebase integration",
 	"license": "MIT",
 	"author": "Giovani Rodriguez",

@@ -14,7 +14,7 @@ import { getStorage } from 'firebase/storage';
 import { getAnalytics, isSupported as isAnalyticsSupported } from 'firebase/analytics';
 import { getPerformance } from 'firebase/performance';
 import { getMessaging, isSupported as isMessagingSupported } from 'firebase/messaging';
-import { getFirekitConfig } from './config.js';
+import { getFirekitConfig, isFirekitConfigured } from './config.js';
 import {
 	FirebaseServiceStatus,
 	FirebaseServiceError,
@@ -72,6 +72,14 @@ class FirebaseService implements FirebaseServiceInstance {
 		}
 
 		if (this.firebaseApp) return this.firebaseApp;
+
+		// Config not set yet — retryable, do not mark as ERROR
+		if (!isFirekitConfigured()) {
+			throw new FirebaseServiceError(
+				'Firekit is not configured. Call initFirekit(config) before using any Firekit services.',
+				'app'
+			);
+		}
 
 		try {
 			this.status = FirebaseServiceStatus.INITIALIZING;

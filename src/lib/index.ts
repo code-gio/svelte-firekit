@@ -129,8 +129,6 @@ export { firekitMessaging, type MessagePayload } from './services/messaging.svel
 // ─── Analytics ────────────────────────────────────────────────────────────────
 export { firekitAnalytics } from './services/analytics.js';
 
-// ─── In-App Messaging ─────────────────────────────────────────────────────────
-export { firekitInAppMessaging } from './services/in-app-messaging.js';
 
 // ─── Firestore bundles ────────────────────────────────────────────────────────
 export { loadFirestoreBundle, getNamedQuery } from './services/bundles.js';
