@@ -7,6 +7,8 @@ A complete Firebase integration library for **Svelte 5** and **SvelteKit**. Buil
 - SSR-safe — all services degrade gracefully on the server
 - Works without SvelteKit (`$app/*`, `$env/*` are never imported)
 
+**Documentation:** [sveltefirekit.com](https://sveltefirekit.com/)
+
 ---
 
 ## Installation
@@ -162,28 +164,41 @@ try {
 
 ```ts
 // Wait for auth to initialize (useful for SSR / load functions)
-const user = await firekitUser.waitForAuth();
+const user = await firekitUser.waitForAuth();        // 10s timeout (default)
+const user = await firekitUser.waitForAuth(5_000);   // custom timeout in ms
 ```
 
 ### Auth components
 
+All auth components wait for Firebase Auth to initialize before rendering. Use the optional `fallback` snippet to show a loading state.
+
 ```svelte
-<SignedIn>  <p>Only shown when signed in</p>  </SignedIn>
-<SignedOut> <p>Only shown when signed out</p> </SignedOut>
+<SignedIn>
+  {#snippet children(user)}<p>Welcome, {user.displayName}</p>{/snippet}
+  {#snippet fallback()}<p>Loading...</p>{/snippet}
+</SignedIn>
+
+<SignedOut>
+  {#snippet children(signIn)}<button onclick={signIn}>Sign in</button>{/snippet}
+  {#snippet fallback()}<p>Loading...</p>{/snippet}
+</SignedOut>
 
 <!-- Route guard with redirect callback -->
 <AuthGuard requireAuth={true} onUnauthorized={() => goto('/login')}>
-  <p>Protected content</p>
+  {#snippet children(user, signOut)}<p>Protected content</p>{/snippet}
+  {#snippet fallback()}<p>Loading...</p>{/snippet}
 </AuthGuard>
 
 <!-- Custom guard with async checks (e.g. role verification) -->
 <CustomGuard
   verificationChecks={[
-    async () => { const doc = await getDoc(...); return doc.data()?.role === 'admin'; }
+    async (user) => user.emailVerified,
+    async (user) => { const doc = await getDoc(...); return doc.data()?.role === 'admin'; }
   ]}
   onUnauthorized={() => goto('/403')}
 >
-  <p>Admin only</p>
+  {#snippet children(user, signOut)}<p>Admin only</p>{/snippet}
+  {#snippet fallback()}<p>Checking permissions...</p>{/snippet}
 </CustomGuard>
 ```
 
@@ -415,16 +430,44 @@ List files:
 {#each dir.items as item}<p>{item.name}</p>{/each}
 ```
 
-Using the `<DownloadURL>` and `<UploadTask>` components:
+### File upload validation
+
+Validate files before uploading — checks size, MIME type, and image dimensions.
+
+```ts
+import { validateFile } from 'svelte-firekit';
+
+const result = await validateFile(file, {
+  maxSize: 5 * 1024 * 1024,          // 5 MB
+  accept: ['image/png', 'image/jpeg', '.webp'],
+  maxWidth: 2048,
+  maxHeight: 2048,
+  minWidth: 100
+});
+
+if (!result.valid) {
+  result.errors.forEach((e) => console.log(e.code, e.message));
+}
+```
+
+The `<UploadTask>` component supports an optional `validate` prop and `invalid` snippet:
+
+```svelte
+<UploadTask path="uploads/{file.name}" {file} validate={{ maxSize: 5_000_000, accept: ['image/*'] }}>
+  {#snippet uploading(task)}<progress value={task.progress} max={100} />{/snippet}
+  {#snippet complete(url)}<img src={url} alt="uploaded" />{/snippet}
+  {#snippet invalid(result)}
+    {#each result.errors as err}<p class="error">{err.message}</p>{/each}
+  {/snippet}
+</UploadTask>
+```
+
+Using the `<DownloadURL>` component:
 
 ```svelte
 <DownloadURL path="images/avatar.jpg">
   {#snippet data(url)}<img src={url} />{/snippet}
 </DownloadURL>
-
-<UploadTask path="uploads/file.jpg" {file}>
-  {#snippet data({ progress, downloadURL })}<progress value={progress} max={100} />{/snippet}
-</UploadTask>
 ```
 
 ---
@@ -566,6 +609,44 @@ firekitInAppMessaging.unsuppress();
 
 ---
 
+## Network / Offline Status
+
+Track browser connectivity and Firestore sync state reactively.
+
+```svelte
+<script lang="ts">
+  import { firekitNetwork } from 'svelte-firekit';
+</script>
+
+{#if !firekitNetwork.online}
+  <p>You're offline. Changes will sync when reconnected.</p>
+{:else if firekitNetwork.hasPendingWrites}
+  <p>Saving...</p>
+{:else}
+  <p>All changes saved</p>
+{/if}
+```
+
+Using the `<NetworkStatus>` component:
+
+```svelte
+<NetworkStatus>
+  {#snippet online()}<span class="green">Connected</span>{/snippet}
+  {#snippet offline()}<span class="red">Offline</span>{/snippet}
+  {#snippet pending()}<span>Saving...</span>{/snippet}
+</NetworkStatus>
+```
+
+Manual control:
+
+```ts
+await firekitNetwork.goOffline();   // force offline mode
+await firekitNetwork.goOnline();    // reconnect
+firekitNetwork.trackWrite();        // mark a pending write
+```
+
+---
+
 ## Presence
 
 ```ts
@@ -656,6 +737,7 @@ const data = await posts.waitForReady();
 | `firekitAnalytics` | Analytics event logging |
 | `firekitMessaging` | Firebase Cloud Messaging |
 | `firekitInAppMessaging` | In-App Messaging suppression control |
+| `firekitNetwork` | Reactive network/offline status |
 | `firekitAppCheck` | App Check initialization |
 
 ### Reactive classes
@@ -676,6 +758,12 @@ const data = await posts.waitForReady();
 | `FirekitCallable` / `firekitCallable()` | Typed Cloud Function caller |
 | `FirekitCallableFromURL` / `firekitCallableFromURL()` | Cloud Function by URL |
 
+### Utilities
+
+| Import | Description |
+|---|---|
+| `validateFile()` | Pre-upload file validation (size, type, dimensions) |
+
 ### Components
 
 | Component | Description |
@@ -689,7 +777,8 @@ const data = await posts.waitForReady();
 | `<Collection>` | Reactive Firestore collection |
 | `<Node>` | Reactive RTDB node |
 | `<DownloadURL>` | Storage download URL |
-| `<UploadTask>` | Resumable file upload |
+| `<UploadTask>` | Resumable file upload with optional validation |
+| `<NetworkStatus>` | Network/sync status display |
 
 ---
 
