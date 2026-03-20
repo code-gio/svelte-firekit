@@ -113,6 +113,9 @@ export class FirekitRemoteConfig {
 			},
 			error: (err) => {
 				this._error = err instanceof Error ? err : new Error(String(err));
+				// Clean up the broken subscription so it doesn't keep firing errors
+				this._unsubscribe?.();
+				this._unsubscribe = null;
 			},
 			complete: () => {}
 		});

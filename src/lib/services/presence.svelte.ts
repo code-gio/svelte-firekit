@@ -203,10 +203,12 @@ class FirekitPresence {
 	private _geo: GeolocationService | null = null;
 	private _connectedUnsub: (() => void) | null = null;
 	private _currentUser: { uid: string } | null = null;
+	private _visibilityListenerAdded = false;
 
 	private constructor() {
 		if (typeof window !== 'undefined') {
 			document.addEventListener('visibilitychange', this._onVisibilityChange);
+			this._visibilityListenerAdded = true;
 		}
 	}
 
@@ -274,10 +276,15 @@ class FirekitPresence {
 		if (!db) throw new PresenceError(PresenceErrorCode.DATABASE_ERROR, 'Realtime Database is not initialized.');
 
 		const connectedRef = ref(db, '.info/connected');
-		this._connectedUnsub = onValue(connectedRef, async (snap) => {
+		this._connectedUnsub = onValue(connectedRef, (snap) => {
 			if (snap.val() === true) {
-				await this.setPresence('online');
-				await this._setupDisconnectHandler();
+				this.setPresence('online')
+					.then(() => this._setupDisconnectHandler())
+					.catch((err) => {
+						this._error = err instanceof PresenceError
+							? err
+							: new PresenceError(PresenceErrorCode.DATABASE_ERROR, (err as Error).message, err);
+					});
 			} else {
 				this._status = 'offline';
 			}
@@ -424,8 +431,9 @@ class FirekitPresence {
 		this._geo?.dispose();
 		this._connectedUnsub?.();
 		this._connectedUnsub = null;
-		if (typeof document !== 'undefined') {
+		if (this._visibilityListenerAdded) {
 			document.removeEventListener('visibilitychange', this._onVisibilityChange);
+			this._visibilityListenerAdded = false;
 		}
 		this._initialized = false;
 		this._status = 'offline';

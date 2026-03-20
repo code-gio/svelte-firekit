@@ -8,6 +8,7 @@
 	import { firekitAppCheck } from '../services/app-check.svelte.js';
 	import { firekitAnalytics } from '../services/analytics.js';
 	import { firekitMessaging } from '../services/messaging.svelte.js';
+	import { firekitUser } from '../services/user.svelte.js';
 
 	/**
 	 * Root provider component. Initializes Firebase (and optionally App Check) and
@@ -75,6 +76,9 @@
 		setContext('firebase/app-check', firekitAppCheck.initialized ? firebaseService.appCheck : null);
 		setContext('firebase/analytics', firekitAnalytics);
 		setContext('firebase/messaging', firekitMessaging);
+
+		// Now that Firebase is configured, start the auth state listener.
+		firekitUser.initialize();
 	}
 </script>
 

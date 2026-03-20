@@ -52,6 +52,7 @@ class FirekitMessaging {
 	private _messaging: Messaging | null = null;
 	private _unsubscribeMessage: (() => void) | null = null;
 	private _requesting = false;
+	private _listening = false;
 
 	private constructor() {
 		this._initPermissionState();
@@ -187,7 +188,9 @@ class FirekitMessaging {
 	// ── Foreground messages ───────────────────────────────────────────────────
 
 	private _listenForMessages(msg: Messaging): void {
+		if (this._listening) return;
 		this._unsubscribeMessage?.();
+		this._listening = true;
 		this._unsubscribeMessage = onMessage(msg, (payload) => {
 			this._lastMessage = payload;
 			this._messages = [...this._messages, payload];
@@ -213,6 +216,7 @@ class FirekitMessaging {
 	dispose(): void {
 		this._unsubscribeMessage?.();
 		this._unsubscribeMessage = null;
+		this._listening = false;
 	}
 }
 

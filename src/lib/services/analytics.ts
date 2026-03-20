@@ -53,7 +53,11 @@ class FirekitAnalytics {
 			const supported = await isSupported();
 			if (!supported) return;
 			this._analytics = getAnalytics(getApp());
-		})();
+		})().catch((err) => {
+			// Reset so next call retries instead of returning a rejected promise forever
+			this._initPromise = null;
+			throw err;
+		});
 		return this._initPromise;
 	}
 

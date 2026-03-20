@@ -5,18 +5,32 @@
 
 	/**
 	 * Renders `children` only when a non-anonymous user is signed in.
-	 * Uses runes — no subscription needed.
+	 * Optionally renders a `fallback` while auth state is loading.
 	 *
 	 * @example
 	 * <SignedIn>
 	 *   {#snippet children(user)}
 	 *     <p>Hello {user.displayName}</p>
 	 *   {/snippet}
+	 *   {#snippet fallback()}
+	 *     <p>Loading…</p>
+	 *   {/snippet}
 	 * </SignedIn>
 	 */
-	let { children }: { children: Snippet<[UserProfile]> } = $props();
+	let {
+		children,
+		fallback
+	}: {
+		children: Snippet<[UserProfile]>;
+		/** Shown while auth state is being determined. */
+		fallback?: Snippet;
+	} = $props();
 </script>
 
-{#if firekitUser.isAuthenticated && firekitUser.user}
+{#if !firekitUser.initialized}
+	{#if fallback}
+		{@render fallback()}
+	{/if}
+{:else if firekitUser.isAuthenticated && firekitUser.user}
 	{@render children(firekitUser.user)}
 {/if}

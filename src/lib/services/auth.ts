@@ -76,9 +76,8 @@ class FirekitAuth {
 	private recaptchaVerifiers = new Map<string, RecaptchaVerifier>();
 
 	private constructor() {
-		if (typeof window !== 'undefined') {
-			this.bootstrap();
-		}
+		// Do NOT bootstrap here — Firebase config may not be set yet.
+		// Auth and Firestore instances are resolved lazily via getAuth() / getFirestore().
 	}
 
 	static getInstance(): FirekitAuth {
@@ -86,19 +85,6 @@ class FirekitAuth {
 			FirekitAuth.instance = new FirekitAuth();
 		}
 		return FirekitAuth.instance;
-	}
-
-	private bootstrap(): void {
-		try {
-			this.auth = firebaseService.getAuthInstance();
-			try {
-				this.firestore = firebaseService.getDbInstance();
-			} catch {
-				this.firestore = null;
-			}
-		} catch {
-			// Firebase not yet configured — services will be accessed lazily
-		}
 	}
 
 	private getAuth() {
@@ -111,9 +97,21 @@ class FirekitAuth {
 		return this.auth;
 	}
 
+	private getFirestore() {
+		if (!this.firestore) {
+			try {
+				this.firestore = firebaseService.getDbInstance();
+			} catch {
+				this.firestore = null;
+			}
+		}
+		return this.firestore;
+	}
+
 	private async syncToFirestore(user: User): Promise<void> {
-		if (!this.firestore) return;
-		await updateUserInFirestore(this.firestore, user);
+		const fs = this.getFirestore();
+		if (!fs) return;
+		await updateUserInFirestore(fs, user);
 	}
 
 	private profile(user: User): UserProfile {
@@ -419,10 +417,11 @@ class FirekitAuth {
 			if (currentPassword) await this.reauthenticate(currentPassword);
 
 			// Soft-delete record in Firestore before removing auth
-			if (this.firestore) {
+			const fs = this.getFirestore();
+			if (fs) {
 				try {
 					await setDoc(
-						doc(this.firestore, 'users', user.uid),
+						doc(fs, 'users', user.uid),
 						{ deleted: true, deletedAt: serverTimestamp() },
 						{ merge: true }
 					);
@@ -700,19 +699,24 @@ class FirekitAuth {
 	// ─── Utility getters ─────────────────────────────────────────────────────────
 
 	getCurrentUser(): User | null {
-		return this.auth?.currentUser ?? null;
+		try {
+			return this.getAuth().currentUser;
+		} catch {
+			return null;
+		}
 	}
 
 	isAuthenticated(): boolean {
-		return this.auth?.currentUser !== null && !this.auth?.currentUser?.isAnonymous;
+		const user = this.getCurrentUser();
+		return user !== null && !user.isAnonymous;
 	}
 
 	isAnonymous(): boolean {
-		return this.auth?.currentUser?.isAnonymous ?? false;
+		return this.getCurrentUser()?.isAnonymous ?? false;
 	}
 
 	isEmailVerified(): boolean {
-		return this.auth?.currentUser?.emailVerified ?? false;
+		return this.getCurrentUser()?.emailVerified ?? false;
 	}
 
 	async cleanup(): Promise<void> {

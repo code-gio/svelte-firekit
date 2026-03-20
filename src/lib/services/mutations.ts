@@ -95,7 +95,7 @@ async function withRetry<T>(
 			}
 		}
 	}
-	throw lastError;
+	throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 /**

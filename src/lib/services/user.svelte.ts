@@ -63,10 +63,11 @@ class FirekitUserStore {
 	private _uid = $derived(this._user?.uid ?? null);
 	private _phoneNumber = $derived(this._user?.phoneNumber ?? null);
 
+	private _listening = false;
+
 	private constructor() {
-		if (typeof window !== 'undefined') {
-			this.bootstrap();
-		}
+		// Do NOT bootstrap here — Firebase config may not be set yet.
+		// Auth listener is set up lazily via initialize() or ensureListening().
 	}
 
 	static getInstance(): FirekitUserStore {
@@ -76,7 +77,23 @@ class FirekitUserStore {
 		return FirekitUserStore.instance;
 	}
 
-	private bootstrap(): void {
+	/**
+	 * Called by FirebaseApp after initFirekit() to start the auth listener.
+	 * Safe to call multiple times — only the first call has an effect.
+	 */
+	initialize(): void {
+		if (typeof window === 'undefined') return;
+		this.ensureListening();
+	}
+
+	/**
+	 * Ensures the onAuthStateChanged listener is registered.
+	 * Called lazily from initialize() or from any public getter/method
+	 * so the store self-heals if Firebase was configured after import.
+	 */
+	private ensureListening(): void {
+		if (this._listening) return;
+
 		try {
 			this.auth = firebaseService.getAuthInstance();
 			try {
@@ -84,11 +101,10 @@ class FirekitUserStore {
 			} catch {
 				this.firestore = null;
 			}
+			this._listening = true;
 			this.listenToAuthState();
-		} catch (err) {
-			this._error = err instanceof Error ? err : new Error(String(err));
-			this._loading = false;
-			this._initialized = true;
+		} catch {
+			// Firebase not yet configured — will retry on next access
 		}
 	}
 
@@ -121,19 +137,21 @@ class FirekitUserStore {
 	}
 
 	// ── Public getters (reactive) ────────────────────────────────────────────────
+	// Each getter calls ensureListening() so the auth listener is registered
+	// on first access, even if initialize() hasn't been called yet.
 
-	get user(): UserProfile | null { return this._user; }
-	get loading(): boolean { return this._loading; }
-	get initialized(): boolean { return this._initialized; }
-	get error(): Error | null { return this._error; }
-	get isAuthenticated(): boolean { return this._isAuthenticated; }
-	get isAnonymous(): boolean { return this._isAnonymous; }
-	get isEmailVerified(): boolean { return this._isEmailVerified; }
-	get email(): string | null { return this._email; }
-	get displayName(): string | null { return this._displayName; }
-	get photoURL(): string | null { return this._photoURL; }
-	get uid(): string | null { return this._uid; }
-	get phoneNumber(): string | null { return this._phoneNumber; }
+	get user(): UserProfile | null { this.ensureListening(); return this._user; }
+	get loading(): boolean { this.ensureListening(); return this._loading; }
+	get initialized(): boolean { this.ensureListening(); return this._initialized; }
+	get error(): Error | null { this.ensureListening(); return this._error; }
+	get isAuthenticated(): boolean { this.ensureListening(); return this._isAuthenticated; }
+	get isAnonymous(): boolean { this.ensureListening(); return this._isAnonymous; }
+	get isEmailVerified(): boolean { this.ensureListening(); return this._isEmailVerified; }
+	get email(): string | null { this.ensureListening(); return this._email; }
+	get displayName(): string | null { this.ensureListening(); return this._displayName; }
+	get photoURL(): string | null { this.ensureListening(); return this._photoURL; }
+	get uid(): string | null { this.ensureListening(); return this._uid; }
+	get phoneNumber(): string | null { this.ensureListening(); return this._phoneNumber; }
 
 	// ── Profile updates ──────────────────────────────────────────────────────────
 
@@ -290,17 +308,26 @@ class FirekitUserStore {
 
 	/**
 	 * Resolves once Firebase Auth has initialized (first `onAuthStateChanged` callback).
+	 * Rejects after `timeoutMs` (default 10 000 ms) if auth never initializes.
 	 * Safe to call server-side — will resolve immediately with null.
 	 */
-	waitForAuth(): Promise<UserProfile | null> {
+	waitForAuth(timeoutMs = 10_000): Promise<UserProfile | null> {
+		if (typeof window === 'undefined') return Promise.resolve(null);
+
+		this.ensureListening();
+
 		if (this._initialized) return Promise.resolve(this._user);
 
-		// $effect.root creates a reactive scope outside of component initialization,
-		// so this works safely whether called inside or outside a Svelte component.
-		return new Promise<UserProfile | null>((resolve) => {
+		return new Promise<UserProfile | null>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				stop();
+				reject(new Error('waitForAuth timed out — Firebase Auth did not initialize.'));
+			}, timeoutMs);
+
 			const stop = $effect.root(() => {
 				$effect(() => {
 					if (this._initialized) {
+						clearTimeout(timer);
 						stop();
 						resolve(this._user);
 					}

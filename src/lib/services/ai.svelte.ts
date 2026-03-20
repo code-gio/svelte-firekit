@@ -292,7 +292,14 @@ export class FirekitChat {
 		// Seed history from initialHistory
 		for (const turn of initialHistory) {
 			const text = turn.parts
-				.map((p) => ('text' in p ? p.text : ''))
+				.map((p) => {
+					if ('text' in p) return p.text;
+					if ('inlineData' in p) return '[image]';
+					if ('fileData' in p) return '[file]';
+					if ('functionCall' in p) return `[function: ${p.functionCall.name}]`;
+					if ('functionResponse' in p) return `[function response: ${p.functionResponse.name}]`;
+					return '[unknown part]';
+				})
 				.filter(Boolean)
 				.join('');
 			this._history.push({

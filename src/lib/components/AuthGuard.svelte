@@ -31,8 +31,8 @@
 		onUnauthorized,
 		fallback
 	}: {
-		/** Content shown when the auth requirement is satisfied. */
-		children: Snippet<[UserProfile, () => Promise<void>]>;
+		/** Content shown when the auth requirement is satisfied. User is null when requireAuth is false. */
+		children: Snippet<[UserProfile | null, () => Promise<void>]>;
 		/** When true (default), requires a signed-in user. When false, requires no user. */
 		requireAuth?: boolean;
 		/** Called when the auth state does not meet the requirement. Use for navigation. */
@@ -45,9 +45,11 @@
 		return firekitAuth.signOut();
 	}
 
-	// React to auth state changes — runs whenever isAuthenticated or loading changes.
+	// Only react after Firebase Auth has fully initialized (first onAuthStateChanged callback).
+	// Uses `initialized` instead of `loading` because `loading` gets reused for profile
+	// updates and could cause false redirects mid-operation.
 	$effect(() => {
-		if (firekitUser.loading) return;
+		if (!firekitUser.initialized) return;
 
 		const isAuth = firekitUser.isAuthenticated;
 		const shouldBlock = requireAuth ? !isAuth : isAuth;
@@ -55,10 +57,10 @@
 	});
 </script>
 
-{#if firekitUser.loading}
+{#if !firekitUser.initialized}
 	{#if fallback}
 		{@render fallback()}
 	{/if}
-{:else if firekitUser.isAuthenticated === requireAuth && firekitUser.user}
+{:else if firekitUser.isAuthenticated === requireAuth}
 	{@render children(firekitUser.user, signOut)}
 {/if}

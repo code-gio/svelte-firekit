@@ -229,6 +229,7 @@ export class FirekitUploadTask {
 					if (this._storageRef) {
 						this._downloadURL = await getDownloadURL(this._storageRef);
 					}
+					this._error = null;
 					this._state = 'success';
 					this._progress = 100;
 				}

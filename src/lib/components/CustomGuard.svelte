@@ -28,7 +28,7 @@
 		fallback,
 		verificationChecks = []
 	}: {
-		children: Snippet<[UserProfile, () => Promise<void>]>;
+		children: Snippet<[UserProfile | null, () => Promise<void>]>;
 		requireAuth?: boolean;
 		onUnauthorized?: () => void;
 		fallback?: Snippet;
@@ -53,8 +53,11 @@
 		}
 	}
 
+	// Only react after Firebase Auth has fully initialized (first onAuthStateChanged callback).
+	// Uses `initialized` instead of `loading` because `loading` gets reused for profile
+	// updates and could cause false redirects mid-operation.
 	$effect(() => {
-		if (firekitUser.loading) return;
+		if (!firekitUser.initialized) return;
 
 		const isAuth = firekitUser.isAuthenticated;
 		const shouldBlock = requireAuth ? !isAuth : isAuth;
@@ -78,10 +81,10 @@
 	});
 </script>
 
-{#if firekitUser.loading || isVerifying}
+{#if !firekitUser.initialized || isVerifying}
 	{#if fallback}
 		{@render fallback()}
 	{/if}
-{:else if firekitUser.isAuthenticated === requireAuth && verificationPassed && firekitUser.user}
+{:else if firekitUser.isAuthenticated === requireAuth && verificationPassed}
 	{@render children(firekitUser.user, signOut)}
 {/if}
