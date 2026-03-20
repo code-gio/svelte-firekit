@@ -5,3 +5,5 @@ export * from './collection.js';
 export * from './mutations.js';
 export * from './presence.js';
 export * from './analytics.js';
+export * from './storage.js';
+export * from './network.js';

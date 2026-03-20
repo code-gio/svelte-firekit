@@ -129,6 +129,9 @@ export { firekitMessaging, type MessagePayload } from './services/messaging.svel
 // ─── Analytics ────────────────────────────────────────────────────────────────
 export { firekitAnalytics } from './services/analytics.js';
 
+// ─── Network / Offline ───────────────────────────────────────────────────────
+export { firekitNetwork } from './services/network.svelte.js';
+
 
 // ─── Firestore bundles ────────────────────────────────────────────────────────
 export { loadFirestoreBundle, getNamedQuery } from './services/bundles.js';
@@ -144,6 +147,7 @@ export { default as Collection } from './components/Collection.svelte';
 export { default as Node } from './components/Node.svelte';
 export { default as DownloadURL } from './components/DownloadURL.svelte';
 export { default as UploadTask } from './components/UploadTask.svelte';
+export { default as NetworkStatus } from './components/NetworkStatus.svelte';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export * from './types/index.js';
